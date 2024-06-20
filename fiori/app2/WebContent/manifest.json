@@ -1,0 +1,117 @@
+{
+  "_version": "1.2.0",
+  "sap.app": {
+    "_version": "1.2.0",
+    "id": "ZAS_CONTRACT_VERSION_UPDATE",
+    "type": "application",
+    "i18n": "i18n/i18n.properties",
+    "applicationVersion": {
+      "version": "1.0.0"
+    },
+    "title": "{{appTitle}}",
+    "description": "{{appDescription}}",
+    "tags": {
+      "keywords": []
+    },
+    "dataSources": {
+      "mainService": {
+        "uri": "/sap/opu/odata/sap/ZAS_CONTRACT_VERSION_SRV/",
+        "type": "OData",
+        "settings": {
+          "oDataVersion": "2.0",
+          "annotations": [
+						"annotation0"
+					]
+        }
+      },
+      "annotation0": {
+				"type": "ODataAnnotation",
+				"uri": "annotations/annotations.xml"
+			}
+     
+    },
+    "offline": false,
+    "sourceTemplate": {
+      "id": "ui5template.smarttemplate",
+      "version": "1.0.0"
+    }
+  },
+
+	"sap.ui": {
+		"technology": "UI5",
+		"icons": {
+			"icon": "",
+			"favIcon": "",
+			"phone": "",
+			"phone@2": "",
+			"tablet": "",
+			"tablet@2": ""
+		},
+		"deviceTypes": {
+			"desktop": true,
+			"tablet": true,
+			"phone": true
+		},
+		"supportedThemes": [
+			"sap_hcb",
+			"sap_bluecrystal"
+		]
+	},
+
+	"sap.ui5": {
+	       "config": {
+	       "sapFiori2Adaptation": true,
+			"fullWidth": true
+		},
+		"rootView": {
+			"viewName": "ZAS_CONTRACT_VERSION_UPDATE.zas_contract_version_update.Main",
+			"type": "XML"
+		},
+		"dependencies": {
+			"minUI5Version": "1.30.0",
+			"libs": {
+				"sap.ui.layout": {},
+				"sap.ui.core": {},
+				"sap.m": {}
+			}
+		},
+		"contentDensities": {
+			"compact": true,
+			"cozy": true
+		},
+		"models": {
+			"i18n": {
+				"type": "sap.ui.model.resource.ResourceModel",
+				"settings": {
+					"bundleName": "ZAS_CONTRACT_VERSION_UPDATE.i18n.i18n"
+				}
+			},
+			
+		"": {
+				"dataSource": "mainService",
+				"type": "sap.ui.model.odata.v2.ODataModel",
+				"preload": true,
+				"settings": {
+					"useBatch": true,
+					"defaultBindingMode": "TwoWay",
+					"defaultCountMode": "Inline",
+					"refreshAfterChange": false,
+					"json": true,
+					"defaultUpdateMethod": "PUT"
+				}
+			}
+		},
+		
+		
+		"resources": {
+			"css": [{
+				"uri": "css/style.css"
+			}]
+			
+			
+		},
+		"componentName": "ZAS_CONTRACT_VERSION_UPDATE"
+		
+	}
+}
+	

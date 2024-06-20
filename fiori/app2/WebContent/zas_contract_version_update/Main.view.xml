@@ -1,0 +1,68 @@
+<mvc:View
+	controllerName="ZAS_CONTRACT_VERSION_UPDATE.zas_contract_version_update.Main"
+	xmlns:html="http://www.w3.org/1999/xhtml" xmlns:mvc="sap.ui.core.mvc"
+	xmlns="sap.m" xmlns:f="sap.f" xmlns:m="sap.ui.layout"
+	xmlns:fb="sap.ui.comp.filterbar" xmlns:core="sap.ui.core"
+	xmlns:smartVariantManagement="sap.ui.comp.smartvariants"
+	xmlns:smartTable="sap.ui.comp.smarttable" height="100%">
+	<App>
+		<pages>
+			<Page title="{i18n>title}"
+				backgroundDesign="sap.m.PageBackgroundDesign.Solid">
+				<content>
+					<!-- use this to make the table occupy the available screen height -->
+					<VBox fitContainer="true">
+					<MessageStrip
+				text="{i18n>informationMessageText}"
+				type="Information"
+				showIcon="true"
+				class="sapUiMediumMarginBegin">
+			</MessageStrip>
+						<sap.ui.comp.smartfilterbar:SmartFilterBar
+							xmlns:sap.ui.comp.smartfilterbar="sap.ui.comp.smartfilterbar"
+							persistencyKey="SmartFilterPKey"
+							filterContainerWidth="30rem" header="Search Criteria"
+							entityType="ContractVersionData" useToolbar="true" hSpacing="20"
+							expandAdvancedArea="true" showGoButton="true" id="filterBar0">
+
+							<sap.ui.comp.smartfilterbar:controlConfiguration>
+								
+								<sap.ui.comp.smartfilterbar:ControlConfiguration
+									id="__configuration1" key="RelPkgName"
+									visibleInAdvancedArea="true" label="Release Package Name" />
+									<sap.ui.comp.smartfilterbar:ControlConfiguration
+									id="__configuration2" key="ShipTo" hasValueHelpDialog="false" visibleInAdvancedArea="true"
+									label="Customer Name or 2 Ltr Code" />
+							</sap.ui.comp.smartfilterbar:controlConfiguration>
+							<!-- layout data used to make the table growing but the filter bar 
+								fixed -->
+							<sap.ui.comp.smartfilterbar:layoutData>
+								<FlexItemData shrinkFactor="0" />
+							</sap.ui.comp.smartfilterbar:layoutData>
+						</sap.ui.comp.smartfilterbar:SmartFilterBar>
+						<smartTable:SmartTable tableType="Table"
+							persistencyKey="SmartTablePKey"
+							smartFilterId="filterBar0" enableAutoBinding="false"
+							id="smartTable0" class="sapUiResponsiveContentPadding"
+							entitySet="ContractVersionDataSet" useExportToExcel="true"
+							useVariantManagement="true" useTablePersonalisation="true"
+							header="Output List" showRowCount="true">
+							<smartTable:customToolbar> <OverflowToolbar design="Solid"> <ToolbarSpacer/> 
+							<Button icon="sap-icon://sys-cancel-2" text="{i18n>clearButtonText}" type="Emphasized" 
+								press="clearFilter" title="Clear Filter"/>
+								<Button icon="sap-icon://edit" text="{i18n>updateButtonText}" type="Emphasized" 
+								press="updateVersion" title="Update Contract Version"/> 
+								</OverflowToolbar> 
+								</smartTable:customToolbar>
+							<!-- layout data used to make the table growing but the filter bar 
+								fixed -->
+							<smartTable:layoutData>
+								<FlexItemData growFactor="1" baseSize="0%" />
+							</smartTable:layoutData>
+						</smartTable:SmartTable>
+					</VBox>
+				</content>
+			</Page>
+		</pages>
+	</App>
+</mvc:View>

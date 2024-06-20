@@ -1,0 +1,8 @@
+.sapUiAppHdr{
+  background-image: -webkit-gradient(linear,left top,left bottom,from(#00aa00),to(#cccccc));
+  
+}
+
+.messageBoxSize {
+	width: 500px;
+}

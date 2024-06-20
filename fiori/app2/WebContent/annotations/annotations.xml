@@ -1,0 +1,199 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<edmx:Edmx
+	xmlns:edmx="http://docs.oasis-open.org/odata/ns/edmx" Version="4.0">
+	<edmx:Reference
+		Uri="/sap/bc/ui5_ui5/ui2/ushell/resources/sap/ushell/components/factsheet/vocabularies/UI.xml">
+		<edmx:Include Alias="UI"
+			Namespace="com.sap.vocabularies.UI.v1" />
+	</edmx:Reference>
+	<edmx:Reference Uri="$metadata">
+		<edmx:Include Alias="" Namespace="" />
+	</edmx:Reference>
+	<edmx:Reference
+		Uri="/sap/bc/ui5_ui5/ui2/ushell/resources/sap/ushell/components/factsheet/vocabularies/Communication.xml">
+		<edmx:Include Alias="vCard"
+			Namespace="com.sap.vocabularies.Communication.v1" />
+	</edmx:Reference>
+	<edmx:Reference
+		Uri="/sap/bc/ui5_ui5/ui2/ushell/resources/sap/ushell/components/factsheet/vocabularies/Common.xml">
+		<edmx:Include Alias="Common"
+			Namespace="com.sap.vocabularies.Common.v1" />
+	</edmx:Reference>
+	<edmx:Reference
+		Uri="http://docs.oasis-open.org/odata/odata/v4.0/errata02/os/complete/vocabularies/Org.OData.Core.V1.xml">
+		<edmx:Include Alias="Core" Namespace="Org.OData.Core.V1" />
+	</edmx:Reference>
+	<edmx:Reference
+		Uri="http://docs.oasis-open.org/odata/odata/v4.0/cs01/vocabularies/Org.OData.Measures.V1.xml">
+		<edmx:Include Alias="CQP"
+			Namespace="Org.OData.Measures.V1" />
+	</edmx:Reference>
+	<edmx:DataServices>
+		<Schema xmlns="http://docs.oasis-open.org/odata/ns/edm">
+
+			<Annotations
+				Target="ZAS_CONTRACT_VERSION_SRV.ContractVersionData/RelPkgName"
+				xmlns="http://docs.oasis-open.org/odata/ns/edm">
+				<Annotation
+					Term="com.sap.vocabularies.Common.v1.ValueList">
+					<Record>
+						<PropertyValue Property="Label"
+							String="Release Package Name1" />
+						<PropertyValue Property="CollectionPath"
+							String="ReleasePkgDataSet" />
+						<PropertyValue Property="SearchSupported"
+							Bool="false" />
+						<PropertyValue Property="Parameters">
+							<Collection>
+								<Record
+									Type="com.sap.vocabularies.Common.v1.ValueListParameterOut">
+									<PropertyValue Property="LocalDataProperty"
+										PropertyPath="RelPkgName" />
+									<PropertyValue Property="ValueListProperty"
+										String="RelPkgName" />
+								</Record>
+							</Collection>
+						</PropertyValue>
+					</Record>
+				</Annotation>
+			</Annotations>
+
+			<Annotations
+				Target="ZAS_CONTRACT_VERSION_SRV.ContractVersionData">
+				<Annotation Term="UI.LineItem">
+					<Collection>
+						<Record Type="UI.DataField">
+							<PropertyValue Property="Value" Path="RelPkgName" />
+						</Record>
+						<Record Type="UI.DataField">
+							<PropertyValue Property="Value" Path="Suite" />
+						</Record>
+						<Record Type="UI.DataField">
+							<PropertyValue Property="Value"
+								Path="SolutionFamily" />
+						</Record>
+						<Record Type="UI.DataField">
+							<PropertyValue Property="Value" Path="Solution" />
+						</Record>
+						<Record Type="UI.DataField">
+							<PropertyValue Property="Value" Path="Capability" />
+						</Record>
+						
+						<Record Type="UI.DataField">
+							<PropertyValue Property="Value" Path="ShipTo" />
+						</Record>
+						<Record Type="UI.DataField">
+							<PropertyValue Property="Value" Path="ShipToCust" />
+						</Record>
+						<Record Type="UI.DataField">
+							<PropertyValue Property="Value" Path="ShipTo2ltr" />
+						</Record>
+						<Record Type="UI.DataField">
+							<PropertyValue Property="Value" Path="CurrProdVer" />
+						</Record>
+						<Record Type="UI.DataField">
+							<PropertyValue Property="Value" Path="PoDesc" />
+						</Record>
+						<Record Type="UI.DataField">
+							<PropertyValue Property="Value"
+								Path="DeliveryMethod" />
+						</Record>
+						<Record Type="UI.DataField">
+							<PropertyValue Property="Value" Path="InstallDate" />
+						</Record>
+						<Record Type="UI.DataField">
+							<PropertyValue Property="Value" Path="ContEndDate" />
+						</Record>
+						<Record Type="UI.DataField">
+							<PropertyValue Property="Value" Path="Product" />
+						</Record>
+						<Record Type="UI.DataField">
+							<PropertyValue Property="Value" Path="SoldTo2ltr" />
+						</Record>
+						<Record Type="UI.DataField">
+							<PropertyValue Property="Value" Path="SoldToCust" />
+						</Record>
+						<Record Type="UI.DataField">
+							<PropertyValue Property="Value" Path="Contract" />
+						</Record>
+						<Record Type="UI.DataField">
+							<PropertyValue Property="Value" Path="Item" />
+						</Record>
+					<!--	<Record Type="UI.DataField">
+							<PropertyValue Property="Value"
+								Path="SolutionFamily" />
+						</Record> -->
+						<Record Type="UI.DataField">
+							<PropertyValue Property="Value"
+								Path="MaterialDescr" />
+						</Record>
+						
+	<!-- Begin of insert by vijay on 02/20/2020 for Logs(Updated By and Updated Date -->
+	
+						<Record Type="UI.DataField">
+							<PropertyValue Property="Value"
+								Path="Updatedby" />
+						</Record>
+						
+						<Record Type="UI.DataField">
+							<PropertyValue Property="Value"
+								Path="Updateddate" />
+						</Record>
+						
+	<!-- End of insert by vijay on 02/20/2020 for Logs(Updated By and Updated Date -->	
+					
+					</Collection>
+				</Annotation>
+				<Annotation Term="UI.SelectionFields">
+					<Collection>
+						<PropertyPath>RelPkgName</PropertyPath>
+						<PropertyPath>ShipTo</PropertyPath>
+
+					</Collection>
+				</Annotation>
+			</Annotations>
+
+
+
+			<Annotations
+				Target="ZAS_CONTRACT_VERSION_SRV.ContractVersionData/ShipTo"
+				xmlns="http://docs.oasis-open.org/odata/ns/edm">
+				<Annotation
+					Term="com.sap.vocabularies.Common.v1.ValueList">
+					<Record>
+						<PropertyValue Property="CollectionPath"
+							String="ShipToCustSet" />
+						<PropertyValue Property="SearchSupported"
+							Bool="true" />
+						<PropertyValue Property="Parameters">
+							<Collection>
+
+								<Record
+									Type="com.sap.vocabularies.Common.v1.ValueListParameterInOut">
+									<PropertyValue Property="LocalDataProperty"
+										PropertyPath="ShipTo" />
+									<PropertyValue Property="ValueListProperty"
+										String="ShipTo" />
+								</Record>
+
+								<Record
+									Type="com.sap.vocabularies.Common.v1.ValueListParameterDisplayOnly">
+									<PropertyValue Property="ValueListProperty"
+										String="ShipToName" />
+								</Record>
+
+								<Record
+									Type="com.sap.vocabularies.Common.v1.ValueListParameterDisplayOnly">
+									<PropertyValue Property="ValueListProperty"
+										String="ShipTo2ltr" />
+								</Record>
+							</Collection>
+						</PropertyValue>
+					</Record>
+				</Annotation>
+			</Annotations>
+
+
+		</Schema>
+	</edmx:DataServices>
+</edmx:Edmx>

@@ -1,0 +1,103 @@
+<mvc:View controllerName="ZAS_VERSION_MASTER.zas_version_master.Main" xmlns:html="http://www.w3.org/1999/xhtml" xmlns:mvc="sap.ui.core.mvc"
+	xmlns="sap.m" xmlns:f="sap.f" xmlns:m="sap.ui.layout" xmlns:fb="sap.ui.comp.filterbar" xmlns:core="sap.ui.core"
+	xmlns:smartVariantManagement="sap.ui.comp.smartvariants" xmlns:smartTable="sap.ui.comp.smarttable" height="100%">
+	<App>
+		<pages>
+			<Page title="{i18n>title}">
+				<content>
+					<!-- use this to make the table occupy the available screen height -->
+					<VBox fitContainer="true">
+						<RadioButtonGroup columns="3" valueState="Error" class="sapUiTinyMarginBottom" select="onSelectRadio">
+							<buttons>
+								<RadioButton id="RB-1" text="Release Package Maintenance" selected="true"/>
+								<RadioButton id="RB-2" text="Add Release Package Versions"/>
+							</buttons>
+						</RadioButtonGroup>
+						<VBox id="matMasFilter">
+							<sap.ui.comp.smartfilterbar:SmartFilterBar xmlns:sap.ui.comp.smartfilterbar="sap.ui.comp.smartfilterbar" persistencyKey="SmartFilterPKey"
+								filterContainerWidth="30rem" header="Search Criteria" entityType="RPMaterialMaster" useToolbar="true" hSpacing="20"
+								expandAdvancedArea="true" showGoButton="true" id="filterBar0">
+								<sap.ui.comp.smartfilterbar:controlConfiguration>
+									<sap.ui.comp.smartfilterbar:ControlConfiguration id="__configuration1" key="RPDesc" visibleInAdvancedArea="true"
+										label="Release Package Name" width="100%"/>
+									<sap.ui.comp.smartfilterbar:ControlConfiguration id="__configuration2" key="Product" visibleInAdvancedArea="true" label="Product"
+										width="100%"/>
+								</sap.ui.comp.smartfilterbar:controlConfiguration>
+								<!-- layout data used to make the table growing but the filter bar 
+								fixed -->
+								<sap.ui.comp.smartfilterbar:layoutData>
+									<FlexItemData shrinkFactor="0"/>
+								</sap.ui.comp.smartfilterbar:layoutData>
+							</sap.ui.comp.smartfilterbar:SmartFilterBar>
+						</VBox>
+						<VBox id="relPkgVerFilter" visible="false">
+							<sap.ui.comp.smartfilterbar:SmartFilterBar xmlns:sap.ui.comp.smartfilterbar="sap.ui.comp.smartfilterbar" persistencyKey="SmartFilterPKey1"
+								filterContainerWidth="30rem" header="Search Criteria" entityType="RPVersionMaster" useToolbar="true" hSpacing="20" expandAdvancedArea="true"
+								showGoButton="true" id="filterBar1">
+								<sap.ui.comp.smartfilterbar:controlConfiguration>
+									<sap.ui.comp.smartfilterbar:ControlConfiguration id="__configuration3" key="RPDesc" visibleInAdvancedArea="true"
+										label="Release Package Name" width="100%"/>
+								</sap.ui.comp.smartfilterbar:controlConfiguration>
+								<!-- layout data used to make the table growing but the filter bar 
+								fixed -->
+								<sap.ui.comp.smartfilterbar:layoutData>
+									<FlexItemData shrinkFactor="0"/>
+								</sap.ui.comp.smartfilterbar:layoutData>
+							</sap.ui.comp.smartfilterbar:SmartFilterBar>
+						</VBox>
+						<VBox id="matMasTable" fitContainer="true" height="100%">
+							<smartTable:SmartTable tableType="Table" persistencyKey="SmartTablePKey" smartFilterId="filterBar0" enableAutoBinding="false"
+								id="smartTable0" class="sapUiResponsiveContentPadding" entitySet="RPMaterialMasterSet" useExportToExcel="true" useVariantManagement="true"
+								useTablePersonalisation="true" header="Output List" showRowCount="true">
+								<smartTable:customToolbar>
+									<OverflowToolbar design="Solid">
+										<ToolbarSpacer/>
+										<Button icon="sap-icon://sys-cancel-2" text="{i18n>clearButtonText}" type="Emphasized" press="clearFilter"/>
+										<Button icon="sap-icon://create" text="{i18n>createReleasePkgButtonText}" type="Emphasized" press="createReleasePkg"
+											tooltip="{i18n>createReleasePkgButtontooltip}"/>
+										<Button icon="sap-icon://edit" text="{i18n>reassignProductButtonText}" type="Emphasized" press="reassignProduct"
+											tooltip="{i18n>reassignProductButtontooltip}"/>
+										<Button icon="sap-icon://add-product" text="{i18n>insertProductButtonText}" type="Emphasized" press="insertProduct"
+											tooltip="{i18n>insertProductButtontooltip}"/>
+										<Button icon="sap-icon://delete" text="{i18n>removeProductButtonText}" type="Emphasized" press="removeProduct"
+											tooltip="{i18n>removeProductButtontooltip}"/>
+										<!--Begin of insert by vijay on 05/14/2020 - 7000001467 To Enable Export All Functionality-->
+										<!--<Button icon="sap-icon://excel-attachment" text="{i18n>exportAllButtonText}" type="Emphasized" press="matMas_exportAll"/>-->
+										<!--End of insert by vijay on 05/14/2020-->
+									</OverflowToolbar>
+								</smartTable:customToolbar>
+								<!-- layout data used to make the table growing but the filter bar 
+								fixed -->
+								<smartTable:layoutData>
+									<FlexItemData growFactor="1" baseSize="0%"/>
+								</smartTable:layoutData>
+							</smartTable:SmartTable>
+						</VBox>
+						<VBox id="relPkgVerTable" visible="false" fitContainer="true" height="100%">
+							<smartTable:SmartTable tableType="Table" persistencyKey="SmartTablePKey1" smartFilterId="filterBar1" enableAutoBinding="false"
+								id="smartTable1" class="sapUiResponsiveContentPadding" entitySet="RPVersionMasterSet" useExportToExcel="true" useVariantManagement="true"
+								useTablePersonalisation="true" header="Output List" showRowCount="true" dataReceived="dataReceived">
+								<smartTable:customToolbar>
+									<OverflowToolbar design="Solid">
+										<ToolbarSpacer/>
+										<Button icon="sap-icon://sys-cancel-2" text="{i18n>clearButtonText}" type="Emphasized" press="clearRelPkgFilter"/>
+										<Button icon="sap-icon://create" text="{i18n>addVersionButtonText}" type="Emphasized" press="addReleasePackageVersion"/>
+										<Button icon="sap-icon://save" text="{i18n>setServiceableFlagButtonText}" type="Emphasized" press="setServiceableFlag"/>
+										<!--Begin of insert by vijay on 05/14/2020 -7000001467  To Enable Export All Functionality-->
+										<!--<Button icon="sap-icon://excel-attachment" text="{i18n>exportAllButtonText}" type="Emphasized" press="rpg_exportAll"/>-->
+										<!--End of insert by vijay on 05/14/2020-->
+									</OverflowToolbar>
+								</smartTable:customToolbar>
+								<!-- layout data used to make the table growing but the filter bar 
+								fixed -->
+								<smartTable:layoutData>
+									<FlexItemData growFactor="1" baseSize="0%"/>
+								</smartTable:layoutData>
+							</smartTable:SmartTable>
+						</VBox>
+					</VBox>
+				</content>
+			</Page>
+		</pages>
+	</App>
+</mvc:View>
