@@ -1,0 +1,567 @@
+FORM FRM_KONDI_WERT_752.
+*{   INSERT         DS0K915822                                        1
+
+** Added By Vijay on 10/23/2017 - Begin
+data : it_komv TYPE TABLE OF komv,
+       wa_komv TYPE          komv,
+*       lv_kbetr_p LIKE komv-kbetr,
+*       lv_kbetr_v LIKE komv-kbetr,
+*       lv_kbetr_f LIKE komv-kbetr,
+       lv_kwert LIKE komv-kwert,
+       lv_kstbm LIKE konm-kstbm,
+       lv_zani  LIKE konv-kbetr.
+
+ranges:  gt_kschl FOR konv-kschl.
+** Added By Vijay on 10/23/2017 - End
+
+Data: t_mcount type I.
+  DATA: lcl_metric_order TYPE REF TO ZCL_METRIC_ORDER.
+
+  IF XKOMV-KSCHL = 'ZP04' AND sy-ucomm NE 'SICH'
+     AND KOMP-VOLUM > 0
+     AND PREISFINDUNGSART EQ 'C'.
+
+    lcl_metric_order = zcl_metric_order=>create( ).
+    CALL METHOD lcl_metric_order->get_zp04_price
+    EXPORTING
+      i_komv  = xkomv
+    IMPORTING
+      o_price = DATA(lv_xkwert).
+
+    xkwert = CONV kwert( lv_xkwert ).
+
+*    if xkomv-waers = 'US$'.
+*      MULTIPLY xkomv-KPEIN by 10.
+*    ENDIF.
+
+  ENDIF.
+if xkomv-kschl = 'ZP02' and xkomv-kinak = 'X' and komp-mvgr1 = 'AM'.
+    if xkomv-waers = 'US$'.
+      xkwert = ( komp-MGAME / 1000000 ) * xkomv-kbetr.
+    else.
+      xkwert = ( komp-MGAME / 1000 ) * xkomv-kbetr.
+    endif.
+    arbfeld = xkwert.
+* Handle Field overflow
+  if arbfeld > 999999999999 or arbfeld < -999999999999.
+    message s802.
+    xkomv-kinak = 'X'.
+    xkomv-kstat  = 'X'.
+    xkwert = 0.
+    xkomv-kbetr = 0.
+    xkomv-fxmsg = '802'.
+    komp-fxmsg  = '802'.
+    komp-prsok = ' '.
+  else.
+*    xkwert = arbfeld.
+*    xkomv-kbetr = xkwert.
+*    xkomv-waers = komk-waerk.
+*    xkomv-kstat  = 'X'.
+    xkomv-kinak = ' '.
+  endif.
+
+endif.
+
+
+
+* change by Bob to handle decimal precision
+  IF xkomv-kschl = 'ZP05' and sy-ucomm ne 'SICH'
+                          and PREISFINDUNGSART EQ 'C'.
+    DATA: lv_char TYPE char16,
+          lv_value TYPE ZVAL_DEC5.
+    data(lt_xkomv) = xkomv[].
+    xkomv-kbetr = xworkd.
+    READ TABLE lt_xkomv INTO data(ls_xkomv)
+    WITH KEY kschl = 'ZP04'.
+    IF sy-subrc EQ 0." AND
+
+*    ls_xkomv-kpein = 1 .
+*      ls_xkomv-waers = 'US$'.
+*      xkomv-KPEIN = 10.
+*Commented bY Vykunt based on US597672/US583779/US596667/US674275 issue 3on 8/13/2019
+    ENDIF.
+    lcl_metric_order = zcl_metric_order=>create( ).
+    data(l_price) =  lcl_metric_order->get_price( ls_xkomv-knumv ).
+ "   xkomv-kwert = CONV kwert( l_price ).
+    IF ls_xkomv-waers = 'US$'.
+      DIVIDE l_price BY 1000.
+    ENDIF.
+    xkomv-waers = ls_xkomv-waers.
+    l_price = ( l_price * komp-UMVKN ) / komp-UMVKZ.
+    lv_value = ( xkwert * l_price ) / 1000.
+    xkwert = CONV kwert( lv_value ).
+
+   " xkwert = lv_value.
+*  xkwert = xworkd.
+  ENDIF.
+* Added to turn the value to negative for True Up " 3/10/2018 Rajib
+  If komp-pstyv = 'ZAS2'.
+    IF XKOMV-KSCHL = 'ZAIP'.  "added for - sign removal from standard code calculation in
+                               "LV61AA43 at 328 on 12/03/2019
+      IF XKOMV-KRECH = 'A'.
+          IF XKOMV-KAWRT < 0.
+           else.
+            XKWERT = 0 - XKWERT.
+
+          ENDIF.
+      ENDIF.
+      ELSE.
+       XKWERT = 0 - XKWERT.
+    ENDIF.
+
+  Endif.
+
+**Begin of insert by vijay on 12/01/2020 to check radixx
+*  clear: lv_min_val,
+*         lv_act_val.
+*  refresh: it_komv.
+*
+*  if xkomv-kschl = 'ZP06'.
+*    it_komv[] = xkomv[].
+*    SORT it_komv by kschl.
+*    Read table it_komv INTO wa_komv with key kschl = 'ZP06' BINARY SEARCH.
+*    if sy-subrc = 0.
+*      lv_min_val = wa_komv-kwert.
+*      endif.
+*      clear: wa_komv.
+*    loop at it_komv INTO wa_komv WHERE kschl = 'ZP10'
+*                                   AND kinak = ''.
+*      lv_act_val = lv_act_val + wa_komv-kwert.
+*      ENDLOOP.
+*
+*      if lv_act_val > lv_min_val.
+*        xkwert = lv_act_val.
+*        else.
+*           xkwert = lv_min_val.
+*          endif.
+*    endif.
+**End of insert by vijay.
+
+* End of Add
+** Added By Vijay on 10/23/2017 - Begin
+*IF xkomv-kschl = 'ZAIP'.
+*refresh it_komv.
+*clear it_komv.
+*it_komv[] = xkomv[].
+*
+*  gt_kschl-sign = 'I'.
+*  gt_kschl-option = 'EQ'.
+*  gt_kschl-low    = 'ZP02'.
+*  APPEND gt_kschl.
+*
+*  gt_kschl-low    = 'ZP03'.
+*  APPEND gt_kschl.
+*
+*  gt_kschl-low    = 'ZP04'.
+*  APPEND gt_kschl.
+*
+*  gt_kschl-low    = 'ZP10'.
+*  APPEND gt_kschl.
+*
+*READ TABLE it_komv INTO wa_komv with key kschl = 'ZANI'.
+*  if sy-subrc = 0.
+*    lv_zani = wa_komv-kbetr.
+*  endif.
+*CLEAR: wa_komv.
+*Loop at it_komv INTO wa_komv WHERE kschl IN gt_kschl.
+*  if sy-subrc = 0.
+*    clear: lv_kstbm.
+**    lv_kbetr_v = wa_komv-kbetr.
+**    lv_kbetr_p = xkomv-kbetr / 1000.
+**    lv_knumh = wa_komv-knumh.
+*    select SINGLE kstbm INTO lv_kstbm FROM konm
+*                                      WHERE knumh = wa_komv-knumh
+*                                      AND   kopos = '1'
+*                                      AND   klfn1 = '1'.
+*      if sy-subrc = 0.
+*                       CALL FUNCTION 'ZASAB_ZAIP_CALC'
+*                         EXPORTING
+*                           p_kbetr_p       = xkomv-kbetr
+*                           p_kbetr_v       = wa_komv-kbetr
+*                           p_kstbm         = lv_kstbm
+*                           p_zani          = lv_zani
+*                        IMPORTING
+*                           KWERT           = lv_kwert.
+*        xkwert = lv_kwert.
+*        endif.
+*    EXIT.
+*    ENDIF.
+*  ENDLOOP.
+
+*    ENDIF.
+** Added By Vijay on 10/23/2017 - End
+* Begin of changes by Vykunt to consider decimals for metric and trueup based on US1545835
+* To get more precision with decimals while condition value calculation for ZAIp
+* TR DS0K969782
+
+  DATA: lv_kbetr_zp02 TYPE Z_VAL_DEC12,
+        lv_kbetr_zp10 TYPE kbetr,
+        lv_kbetr_zaip TYPE Z_VAL_DEC12,
+        lv_zaehk TYPE komv-ZAEHK,
+        lv_string TYPE char16,
+        lv_length TYPE I,
+        lv_numeric TYPE char14,
+        lv_decimals TYPE char14,
+        lv_kawrt TYPE komv-kawrt,
+        lv_kawrt_tmp TYPE komv-kawrt,
+        lv_prev TYPE komv-kawrt,
+        lv_flag TYPE c,
+        lv_doc_type TYPE vbak-auart,
+        lv_kwert_tmp TYPE komv-kwert,
+        lv_kwert_str TYPE string,
+
+        lt_konm TYPE TABLE OF konm.
+
+
+  TYPES :BEGIN OF ty_komv_net,
+         komv type komv,
+         net_amount TYPE Z_VAL_DEC12,
+         END OF ty_komv_net.
+
+  DATA : lt_komv TYPE TABLE OF ty_komv_net WITH DEFAULT KEY,
+          ls_komv TYPE ty_komv_net.
+
+
+  IF komp-aubel = '$TEMP'. "Only in creation mode/change mode
+    IF ( KOMK_STEU-AUART = 'ZASO' OR KOMK_STEU-AUART = 'ZAST') and KOMK_STEU-VKORG = 'US01'.
+      DATA(lv_change) = abap_true.
+      ENDIF.
+
+  ELSE.
+    SELECT SINGLE AUART INTO lv_doc_type FROM vbak WHERE vbeln = komp-aubel.
+      IF ( lv_doc_type = 'ZASO' OR lv_doc_type = 'ZAST') and KOMK_STEU-VKORG = 'US01'.
+       lv_change = abap_true.
+      ENDIF.
+  ENDIF.
+
+
+  if lv_change = abap_true.
+
+*    IF xkomv-kschl = 'ZAIP'.
+
+
+    lcl_metric_order = zcl_metric_order=>create( ).
+
+
+    DATA : lv_count TYPE I,
+           lv_final TYPE string.
+
+    LOOP AT xkomv INTO DATA(lwa_xkomv) .
+
+      if lwa_xkomv-kschl = 'ZP10' AND lwa_xkomv-kinak = space.
+
+      lv_flag = abap_true.
+
+      MOVE-CORRESPONDING lwa_xkomv to ls_komv-komv.
+      APPEND ls_komv to lt_komv.
+
+
+** Deriving the no of decimals for each ZP10 and considering the highetst value for all zp10 conditions
+       CALL METHOD lcl_metric_order->get_decimals
+        EXPORTING
+          i_kpein =  lwa_xkomv-kpein   " Condition pricing unit
+          i_kbetr =  lwa_xkomv-kbetr   " Number of the document condition
+          i_waers =  lwa_xkomv-waers   "currency
+        IMPORTING
+          o_kbetr =  lv_kbetr_zp02
+          .
+
+      lv_string =    lv_kbetr_zp02.
+
+
+      CALL FUNCTION 'FTR_CORR_SWIFT_DELETE_ENDZERO'
+      CHANGING
+        c_value       = lv_string
+        .
+
+      SPLIT lv_string AT '.' INTO lv_numeric lv_decimals.
+      DATA(lv_length_tmp) = STRLEN( lv_decimals ).
+
+
+      IF lv_length < lv_length_tmp.
+
+        lv_length = lv_length_tmp.
+
+      ENDIF.
+      ENDIF.
+
+    ENDLOOP.
+
+*** Counting the no of reords of ZP10
+    DESCRIBE TABLE lt_komv LINES lv_count.
+
+
+    READ TABLE xkomv INTO lwa_xkomv  WITH KEY kschl = 'ZP02' kinak = space.
+    IF sy-subrc = 0.
+      lv_flag = abap_true.
+     ENDIF.
+    READ TABLE lt_komv INTO DATA(wa_tmp_komv) INDEX 1.
+      IF sy-subrc = 0.
+        lwa_xkomv-kbetr = wa_tmp_komv-komv-kbetr.
+        lwa_xkomv-kpein = wa_tmp_komv-komv-kpein.
+        lwa_xkomv-waers = wa_tmp_komv-komv-waers.
+        lwa_xkomv-kawrt = wa_tmp_komv-komv-kawrt.
+
+    ENDIF.
+
+
+    IF lv_flag IS NOT INITIAL.
+      IF lwa_xkomv-kpein  IS NOT INITIAL.
+
+        CALL METHOD lcl_metric_order->get_decimals
+        EXPORTING
+          i_kpein =  lwa_xkomv-kpein   " Condition pricing unit
+          i_kbetr =  lwa_xkomv-kbetr   " Number of the document condition
+          i_waers =  lwa_xkomv-waers   "currency
+        IMPORTING
+          o_kbetr =  lv_kbetr_zp02
+          .
+
+      ENDIF.
+      lv_string =    lv_kbetr_zp02.
+      lv_kawrt = lwa_xkomv-kawrt.
+
+      CALL FUNCTION 'FTR_CORR_SWIFT_DELETE_ENDZERO'
+      CHANGING
+        c_value       = lv_string
+        .
+
+      ENDIF.
+      SPLIT lv_string AT '.' INTO lv_numeric lv_decimals.
+
+      IF lv_count is NOT INITIAL.  "for ZP10 condition lv_length is derived already
+      ELSE.
+        lv_length = STRLEN( lv_decimals ).
+      ENDIF.
+      CLEAR lv_kbetr_zaip.
+      CLEAR: lv_numeric ,lv_decimals.
+
+
+      DATA lv_result TYPE DECFLOAT34.
+      DATA lv_round TYPE decfloat34.
+      DATA LV_TMP_Quantity TYPE menge_d.
+
+
+      LOOP AT xkomv INTO lwa_xkomv WHERE kschl = 'ZAIP' AND kinak = space."AND waers IS INITIAL .
+.
+
+        IF lv_count IS NOT INITIAL .
+          CLEAR lwa_xkomv-kwert.
+
+          DO lv_count TIMES.
+
+            DATA(lv_tabix) = sy-INDEX.
+
+            READ TABLE lt_komv INTO ls_komv INDEX lv_tabix.
+            IF sy-subrc = 0.
+
+              IF ls_komv-net_amount IS NOT INITIAL.
+                lv_kbetr_zp02 = ls_komv-net_amount.
+
+              ELSE.
+               CALL METHOD lcl_metric_order->get_decimals
+        EXPORTING
+          i_kpein =  ls_komv-komv-kpein   " Condition pricing unit
+          i_kbetr =  ls_komv-komv-kbetr   " Number of the document condition
+          i_waers =  ls_komv-komv-waers   "currency
+        IMPORTING
+          o_kbetr =  lv_kbetr_zp02
+          .
+           endif.
+
+              CALL METHOD lcl_metric_order->get_round_result
+              EXPORTING
+                i_kbetr_zaip =  lwa_xkomv-kbetr
+                i_kbetr      =  lv_kbetr_zp02
+              IMPORTING
+                o_kbetr      =  lv_kbetr_zaip
+                .
+
+            ENDIF.
+
+            lv_string =    lv_kbetr_zaip.
+
+            IF lv_length > 5.
+              lv_round = ROUND( val = lv_string dec = lv_length ).
+              IF lv_round = 0.
+                lv_round = ROUND( val = lv_string dec = lv_length + 1 ).
+              ENDIF.
+            ELSE.
+              lv_round = ROUND( val = lv_string dec = 5 ).
+              IF lv_round = 0.
+                lv_round = ROUND( val = lv_string dec = 6 ).
+              ENDIF.
+            ENDIF.
+
+* Get derived quantity
+            CALL METHOD lcl_metric_order->get_quantity
+              EXPORTING
+                i_kwert    =  ls_komv-komv-kwert   " Condition value
+                i_kbetr    =   ls_komv-komv-kbetr  " Rate (condition amount or percentage)
+                i_waers    =   ls_komv-komv-waers  " Currency Key
+              IMPORTING
+                o_quantity =  lv_kawrt_tmp   " Condition base value
+              .
+
+
+           lv_kawrt_tmp = lv_kawrt_tmp * LS_KOMV-KOMV-KPEIN .
+           IF lv_kawrt_tmp is NOT INITIAL AND lv_round is NOT INITIAL.
+
+*            CALL METHOD lcl_metric_order->get_round_kwert
+*            EXPORTING
+*              i_round     = lv_round
+*
+*              i_kawrt_tmp     = lv_kawrt_tmp
+*            IMPORTING
+*              o_kwert_str = lv_kwert_str
+*              .
+*            SPLIT lv_kwert_str AT '.' INTO lv_numeric lv_decimals.
+*          CONCATENATE lv_numeric '.' lv_decimals+0(2) INTO lv_kwert_str.
+*
+*          CLEAR: lv_numeric, lv_decimals.
+*          move lv_kwert_str to lv_kwert_tmp.
+*          CLEAR lv_kwert_str.
+
+
+          lv_kwert_tmp = lv_round * lv_kawrt_tmp .
+
+            ENDIF.
+
+
+*            lv_kwert_tmp =  lv_round * lv_kawrt_tmp  .
+           lwa_xkomv-kwert = lv_kwert_tmp + lwa_xkomv-kwert.
+            CLEAR lv_kwert_tmp.
+            CLEAR lv_kawrt_tmp.
+
+
+            CALL METHOD lcl_metric_order->get_sum
+            EXPORTING
+              i_round      = lv_round
+*                i_kawrt      = lv_kawrt
+              i_kbetr_zp02 = lv_kbetr_zp02    " Value w/12 decimals
+            IMPORTING
+              o_kbetr_zp02 = lv_kbetr_zp02    " Value w/12 decimals
+*                o_kwert      = xkomv-kwert
+              .
+         ls_komv-net_amount = lv_kbetr_zp02.
+         CLEAR lv_kbetr_zp02.
+
+         MODIFY  lt_komv FROM ls_komv INDEX lv_tabix TRANSPORTING net_amount  .
+
+         CLEAR ls_komv-net_amount.
+
+        ENDDO.
+        CLEAR lv_tabix.
+        CLEAR :lv_kbetr_zaip.
+
+        if lwa_xkomv-ksteu ne 'E'. "manualchange
+         MODIFY xkomv FROM lwa_xkomv TRANSPORTING kwert." WHERE  zaehk = lv_zaehk.
+         endif.
+* Net value issue
+        if xkomv-ksteu ne 'E'. "manualchange
+         IF xkomv-kschl = 'ZAIP' AND lwa_xkomv-zaehk = xkomv-zaehk .
+
+           XKWERT = lwa_xkomv-kwert.
+*           xkomv-kwert =  XKWERT.
+           endif.
+         ENDIF.
+
+
+         CLEAR  lwa_xkomv-kwert.
+
+
+        ELSE.
+
+          CALL METHOD lcl_metric_order->get_round_result
+          EXPORTING
+            i_kbetr_zaip =  lwa_xkomv-kbetr
+            i_kbetr      =  lv_kbetr_zp02
+          IMPORTING
+            o_kbetr      =  lv_kbetr_zaip
+            .
+
+          lv_string =    lv_kbetr_zaip.
+
+          IF lv_length > 5.
+            lv_round = ROUND( val = lv_string dec = lv_length ).
+            IF lv_round = 0.
+              lv_round = ROUND( val = lv_string dec = lv_length + 1 ).
+            ENDIF.
+          ELSE.
+            lv_round = ROUND( val = lv_string dec = 5 ).
+            IF lv_round = 0.
+              lv_round = ROUND( val = lv_string dec = 6 ).
+            ENDIF.
+          ENDIF.
+*          IF lv_kawrt is NOT INITIAL AND lv_round is NOT INITIAL.
+*          CALL METHOD lcl_metric_order->get_round_kwert
+*            EXPORTING
+*              i_round     = lv_round
+*
+*              i_kawrt     = lv_kawrt
+*            IMPORTING
+*              o_kwert_str = lv_kwert_str
+*              .
+*          SPLIT lv_kwert_str AT '.' INTO lv_numeric lv_decimals.
+*          CONCATENATE lv_numeric '.' lv_decimals+0(2) INTO lv_kwert_str.
+*
+*          CLEAR: lv_numeric, lv_decimals.
+*          move lv_kwert_str to lwa_xkomv-kwert.
+*          endif.
+          lwa_xkomv-kwert = ( lv_round * lv_kawrt  )  /  1000  .
+
+        CLEAR lv_kwert_str.
+
+        CLEAR :lv_kbetr_zaip.
+
+        READ TABLE xkomv INTO DATA(lw_xkomv) with key kinak = space.
+           IF SY-SUBRC = 0.
+             IF lw_xkomv-kwert < 0.
+              DATA(lv_sign) = abap_true .
+
+             ENDIF.
+
+           ENDIF.
+          IF lv_sign is NOT INITIAL.
+             lwa_xkomv-kwert = 0 - lwa_xkomv-kwert.
+
+           ENDIF.
+
+        if lwa_xkomv-ksteu ne 'E'. "manualchange
+
+        MODIFY xkomv FROM lwa_xkomv TRANSPORTING kwert." WHERE  zaehk = lv_zaehk.
+
+        endif.
+
+* Net value issue
+        if xkomv-ksteu ne 'E'. "manualchange
+        IF xkomv-kschl = 'ZAIP' AND lwa_xkomv-zaehk = xkomv-zaehk .
+
+           XKWERT =  lwa_xkomv-kwert .
+           endif.
+         ENDIF.
+
+         CLEAR lv_sign.
+            CLEAR lwa_xkomv.
+        CALL METHOD lcl_metric_order->get_sum
+        EXPORTING
+          i_round      = lv_round
+
+          i_kbetr_zp02 = lv_kbetr_zp02     " Value w/12 decimals
+        IMPORTING
+          o_kbetr_zp02 = lv_kbetr_zp02   " Value w/12 decimals
+
+          .
+
+         endif.
+      ENDLOOP.
+
+*    ENDIF.  "Commented to work when only one ZAIP condition exists
+
+ENDIF.
+
+
+* End of changes by Vykunt to consider decimals for metric and trueup based on US1545
+*}   INSERT
+ENDFORM.
+
