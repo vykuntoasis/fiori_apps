@@ -1,0 +1,560 @@
+REPORT zas_orders_rejection NO STANDARD PAGE HEADING MESSAGE-ID zmsg_wo.
+****************************************************************************************************
+* Report       : ZAS_ORDERS_REJECTION                                                              *
+* Title        : Airline Solutions: Reason fo rejection update on Sales Order                      *
+* Programmer   : Vykuntarao tangudu                                                                *
+* Date Written : 30/05/2018                                                                        *
+****************************************************************************************************
+****************************************************************************************************
+*                Maintenance / Enhancements                                                        *
+*--------------------------------------------------------------------------------------------------*
+* Programmer   : Date       : Description                                                          *
+*--------------------------------------------------------------------------------------------------*
+* Vijay Sekar  : 06/15/2018 : Added VBAP-NETWR (Net value) in the report output.                   *
+*                                                                                                  *
+****************************************************************************************************
+
+*&---------------------------------------------------------------------*
+*          TYPE POOLS
+*&---------------------------------------------------------------------*
+TYPE-POOLS : slis. " used for ALV output
+
+*&---------------------------------------------------------------------*
+*          TYPE DECLARATION
+*&---------------------------------------------------------------------*
+* FOR LAYOUT OF ALV GRID
+DATA : wa_layout TYPE slis_layout_alv. "work area for layout design
+* FIELD CATALOG
+DATA : w_fieldcat TYPE slis_fieldcat_alv, "internal table for field catalog
+       i_fieldcat TYPE slis_t_fieldcat_alv. "work area for field catalog
+DATA v_flag TYPE c.
+TYPES :
+* for table output(work order details)
+  BEGIN OF t_output,
+    checkbox(1),
+    vbeln       TYPE vbak-vbeln, " order number
+    posnr       TYPE vbap-posnr, " item
+    matnr       TYPE vbap-matnr,
+    arktx       TYPE vbap-arktx,
+    abgru       TYPE vbap-abgru,
+    netwr       TYPE vbap-netwr, " Net Value      Added by vijay on 06/15/2018
+    bezei       TYPE tvagt-bezei,
+  END OF t_output,
+  BEGIN OF t_output_1,
+*    CHECKBOX(1),
+    vbeln TYPE vbak-vbeln, " order number
+    posnr TYPE vbap-posnr, " item
+    matnr TYPE vbap-matnr,
+    arktx TYPE vbap-arktx,
+    abgru TYPE vbap-abgru,
+    netwr TYPE vbap-netwr, " Net Value      Added by vijay on 06/15/2018
+    bezei TYPE tvagt-bezei,
+  END OF t_output_1,
+  BEGIN OF t_output_2,
+*    CHECKBOX(1),
+    vbeln TYPE vbak-vbeln, " order number
+    posnr TYPE vbap-posnr, " item
+  END OF t_output_2.
+
+
+*&---------------------------------------------------------------------*
+*          TABLES DECLARATION
+*&---------------------------------------------------------------------*
+TABLES: vbak,vbkd,vbap.
+*&---------------------------------------------------------------------*
+*         INTERNAL TABLES DECLARATION
+*&---------------------------------------------------------------------*
+DATA: it_output   TYPE TABLE OF t_output,
+      it_output_1 TYPE TABLE OF t_output_1,
+      ls_output   TYPE t_output,
+      it_chkbox TYPE TABLE OF t_output_2,
+       ws_output TYPE t_output.
+FIELD-SYMBOLS : <fs_output>   TYPE t_output,
+
+                <fs_output_1> TYPE t_output_1.
+*&---------------------------------------------------------------------*
+*          PARAMETERS FOR SELECTION-SCREEN
+*&---------------------------------------------------------------------*
+*          SELECTION SCREEN BLOCK FOR THE VARIANT NAME
+*&---------------------------------------------------------------------*
+TYPES :BEGIN OF ty_rej,
+         abgru TYPE abgru_va,
+         bezei TYPE tvagt-bezei,
+       END OF ty_rej.
+DATA : ls_rej   TYPE ty_rej,
+       it_rej   TYPE TABLE OF ty_rej,
+       lv_lines TYPE i.
+*Internal tables:
+DATA:
+*  gt_vbap           TYPE STANDARD TABLE OF vbap,
+  gt_item_in  TYPE STANDARD TABLE OF bapisditm,
+  gt_item_inx TYPE STANDARD TABLE OF bapisditmx,
+  gt_return   TYPE STANDARD TABLE OF bapiret2,
+  p_abgru     TYPE vbap-abgru.
+*Constants:
+CONSTANTS:
+  gc_error   TYPE string VALUE ': An error occured, no change done to the sales order.',
+  gc_success TYPE string VALUE ': Sales order items changed successfully.',
+  con_spart  TYPE spart  VALUE '10'.
+
+*Structures:
+DATA:
+  gst_item_hedx TYPE bapisdh1x,
+  gst_item_in   TYPE bapisditm,
+  gst_item_inx  TYPE bapisditmx,
+  gv_msg        TYPE string.
+
+SELECTION-SCREEN BEGIN OF BLOCK blk1 WITH FRAME TITLE text-t01.
+SELECT-OPTIONS:
+     s_vbeln FOR vbak-vbeln,  "OBLIGATORY,   Commented by Vijay on 06/15/2018
+     s_auart FOR vbak-auart DEFAULT 'ZPSV',  " Addition of ZPSV by vijay on 06/15/2018
+     s_matnr FOR vbap-matnr,
+     s_kunnr FOR vbak-kunnr,
+     s_fkdat FOR vbkd-fkdat.
+SELECTION-SCREEN END OF BLOCK blk1.
+
+START-OF-SELECTION.
+  PERFORM table_rej.
+
+  PERFORM build_fieldcatlog.
+*  PERFORM PFSTATUS.
+  PERFORM get_and_display_data.
+
+END-OF-SELECTION.
+*&---------------------------------------------------------------------*
+*&      Form  GET_AND_DISPLAY_DATA
+*&---------------------------------------------------------------------*
+*       text
+*----------------------------------------------------------------------*
+*  -->  p1        text
+*  <--  p2        text
+*----------------------------------------------------------------------*
+FORM get_and_display_data .
+  IF s_vbeln IS NOT INITIAL.
+    SELECT a~vbeln
+       b~posnr
+       b~matnr
+       b~arktx
+       b~abgru
+       b~netwr     " Added by vijay on 06/15/2018
+       INTO TABLE it_output_1
+       FROM vbak AS a INNER JOIN vbap AS b ON a~vbeln EQ b~vbeln
+                     INNER JOIN vbkd AS c ON a~vbeln EQ c~vbeln
+       WHERE a~vbeln IN s_vbeln
+         AND a~spart EQ con_spart   "Added by vijay on 06/15/2018
+         AND c~posnr EQ space AND c~fkdat IN s_fkdat.
+    " AND B~VBELN EQ C~VBELN .
+    SORT it_output_1 BY vbeln posnr.
+
+
+* Appending BEZEI value to IT_OUTPUT
+    IF sy-subrc = 0.
+      LOOP AT it_output_1 ASSIGNING <fs_output_1>.
+        READ TABLE it_rej INTO ls_rej WITH KEY <fs_output_1>-abgru.
+        IF sy-subrc = 0.
+          <fs_output_1>-bezei = ls_rej-bezei.
+        ENDIF.
+       ws_output-vbeln = <fs_output_1>-vbeln .
+       ws_output-posnr = <fs_output_1>-posnr .
+       ws_output-arktx = <fs_output_1>-arktx .
+       ws_output-abgru = <fs_output_1>-abgru .
+       ws_output-netwr = <fs_output_1>-netwr .
+       ws_output-bezei = <fs_output_1>-bezei .
+      APPEND ws_output TO it_output.
+      CLEAR ws_output.
+      CLEAR <fs_output_1>.
+
+      ENDLOOP.
+
+
+    ENDIF.
+
+
+    REFRESH it_output_1.
+
+    IF it_output IS NOT INITIAL.
+
+      wa_layout-box_fieldname = 'CHECKBOX'.
+      wa_layout-colwidth_optimize = 'X'.
+
+      CALL FUNCTION 'REUSE_ALV_GRID_DISPLAY'
+        EXPORTING
+*         I_INTERFACE_CHECK        = ' '
+*         I_BYPASSING_BUFFER       = ' '
+*         I_BUFFER_ACTIVE          = ' '
+          i_callback_program       = sy-repid
+          i_callback_pf_status_set = 'SET_PF_STATUS'
+          i_callback_user_command  = 'USER_COMMAND'
+*         I_CALLBACK_TOP_OF_PAGE   = ' '
+*         I_CALLBACK_HTML_TOP_OF_PAGE       = ' '
+*         I_CALLBACK_HTML_END_OF_LIST       = ' '
+*         I_STRUCTURE_NAME         =
+*         I_BACKGROUND_ID          = ' '
+*         I_GRID_TITLE             =
+*         I_GRID_SETTINGS          =
+          is_layout                = wa_layout      " for layout
+          it_fieldcat              = i_fieldcat       " field catalog
+*         IT_EXCLUDING             =
+*         IT_SPECIAL_GROUPS        =
+*         IT_SORT                  =
+*         IT_FILTER                =
+*         IS_SEL_HIDE              =
+*         I_DEFAULT                = 'X'
+*         I_SAVE                   = ' '
+*         IS_VARIANT               =
+*         IT_EVENTS                =
+*         IT_EVENT_EXIT            =
+*         IS_PRINT                 =
+*         IS_REPREP_ID             =
+*         I_SCREEN_START_COLUMN    = 0
+*         I_SCREEN_START_LINE      = 0
+*         I_SCREEN_END_COLUMN      = 0
+*         I_SCREEN_END_LINE        = 0
+*         I_HTML_HEIGHT_TOP        = 0
+*         I_HTML_HEIGHT_END        = 0
+*         IT_ALV_GRAPHICS          =
+*         IT_HYPERLINK             =
+*         IT_ADD_FIELDCAT          =
+*         IT_EXCEPT_QINFO          =
+*         IR_SALV_FULLSCREEN_ADAPTER        =
+*   IMPORTING
+*         E_EXIT_CAUSED_BY_CALLER  =
+*         ES_EXIT_CAUSED_BY_USER   =
+        TABLES
+          t_outtab                 = it_output
+*   EXCEPTIONS
+*         PROGRAM_ERROR            = 1
+*         OTHERS                   = 2
+        .
+      IF sy-subrc <> 0.
+* Implement suitable error handling here
+      ENDIF.
+*      CLEAR WA_LAYOUT.
+
+
+    ENDIF.
+
+  ENDIF.
+
+
+ENDFORM.
+*&---------------------------------------------------------------------*
+*&      Form  FIELD_CATALOG
+*&---------------------------------------------------------------------*
+*       text
+*----------------------------------------------------------------------*
+*  -->  p1        text
+*  <--  p2        text
+*----------------------------------------------------------------------*
+FORM build_fieldcatlog .
+  CLEAR:w_fieldcat.
+  REFRESH i_fieldcat.
+
+  PERFORM build_fcatalog1 USING :
+          'VBELN' 'IT_OUTPUT' 'Document'  ,
+          'POSNR' 'IT_OUTPUT' 'Item',
+          'MATNR' 'IT_OUTPUT' 'Material' ,
+          'ARKTX' 'IT_OUTPUT' 'Material description'  ,
+          'NETWR' 'IT_OUTPUT' 'Net Value' ,     "Added by vijay on 06/15/2018
+          'BEZEI' 'IT_OUTPUT' 'Reason for rejection' .
+  "BUILD_FIELDCATLOG
+ENDFORM.
+
+FORM build_fcatalog1 USING l_field l_tab l_text .
+
+  w_fieldcat-fieldname      = l_field.
+  w_fieldcat-tabname        = l_tab.
+  w_fieldcat-seltext_m      = l_text.
+*  W_FIELDCAT-col_pos = l_pos.
+
+  APPEND w_fieldcat TO i_fieldcat.
+  CLEAR w_fieldcat.
+
+ENDFORM.
+*&---------------------------------------------------------------------*
+*&      Form  PFSTATUS
+*&---------------------------------------------------------------------*
+*       text
+*----------------------------------------------------------------------*
+*  -->  p1        text
+*  <--  p2        text
+*----------------------------------------------------------------------*
+
+FORM user_command USING r_ucomm     LIKE sy-ucomm
+                        rs_selfield TYPE slis_selfield.
+
+  DATA :ls_vbap         TYPE vbap,
+        iorder_item_in  TYPE STANDARD TABLE OF bapisditm WITH HEADER LINE,
+        iorder_item_inx TYPE STANDARD TABLE OF bapisditmx WITH HEADER LINE,
+        iorder_hdr_inx  TYPE bapisdhd1x,
+        ireturn         TYPE STANDARD TABLE OF bapiret2 WITH HEADER LINE,
+        v_text          TYPE string,
+        v_text1         TYPE string,
+        v_text2         TYPE string.
+
+
+  DATA :v_count  TYPE i,
+        v_index1 TYPE i.
+
+  CASE sy-ucomm.
+
+    WHEN 'REASON'.
+      CALL FUNCTION 'POPUP_WITH_TABLE_DISPLAY'
+        EXPORTING
+          endpos_col   = '40'
+          endpos_row   = '12'
+          startpos_col = '10'
+          startpos_row = '1'
+          titletext    = 'Reason for rejection'
+        IMPORTING
+          choise       = v_index1
+        TABLES
+          valuetab     = it_rej
+        EXCEPTIONS
+          break_off    = 1
+          OTHERS       = 2.
+      IF sy-subrc <> 0.
+        DATA v_index TYPE i.
+        CASE sy-subrc.
+          WHEN '1'.
+            LEAVE TO SCREEN 0.
+        ENDCASE.
+      ELSE.
+        CASE sy-ucomm.
+          WHEN 'SLCT'.
+            READ TABLE it_rej INTO ls_rej INDEX v_index1.
+            CLEAR v_index1.
+            LOOP AT it_output INTO ls_output.
+              IF ls_output-checkbox = 'X'.
+                ls_output-bezei = ls_rej-bezei.
+                ls_output-abgru =  ls_rej-abgru.
+                MODIFY it_output FROM ls_output .
+              ENDIF.
+            ENDLOOP.
+            CLEAR: ls_rej,ls_output.
+            READ TABLE it_output INTO ls_output WITH KEY checkbox = 'X'.
+            IF sy-subrc = 0.
+              CLEAR v_index.
+              CALL FUNCTION 'REUSE_ALV_GRID_DISPLAY'
+                EXPORTING
+*                 I_INTERFACE_CHECK        = ' '
+*                 I_BYPASSING_BUFFER       = ' '
+*                 I_BUFFER_ACTIVE          = ' '
+                  i_callback_program       = sy-repid
+                  i_callback_pf_status_set = 'SET_PF_STATUS'
+                  i_callback_user_command  = 'USER_COMMAND'
+*                 I_CALLBACK_TOP_OF_PAGE   = ' '
+*                 I_CALLBACK_HTML_TOP_OF_PAGE       = ' '
+*                 I_CALLBACK_HTML_END_OF_LIST       = ' '
+*                 I_STRUCTURE_NAME         =
+*                 I_BACKGROUND_ID          = ' '
+*                 I_GRID_TITLE             =
+*                 I_GRID_SETTINGS          =
+                  is_layout                = wa_layout      " for layout
+                  it_fieldcat              = i_fieldcat       " field catalog
+*                 IT_EXCLUDING             =
+*                 IT_SPECIAL_GROUPS        =
+*                 IT_SORT                  =
+*                 IT_FILTER                =
+*                 IS_SEL_HIDE              =
+*                 I_DEFAULT                = 'X'
+*                 I_SAVE                   = ' '
+*                 IS_VARIANT               =
+*                 IT_EVENTS                =
+*                 IT_EVENT_EXIT            =
+*                 IS_PRINT                 =
+*                 IS_REPREP_ID             =
+*                 I_SCREEN_START_COLUMN    = 0
+*                 I_SCREEN_START_LINE      = 0
+*                 I_SCREEN_END_COLUMN      = 0
+*                 I_SCREEN_END_LINE        = 0
+*                 I_HTML_HEIGHT_TOP        = 0
+*                 I_HTML_HEIGHT_END        = 0
+*                 IT_ALV_GRAPHICS          =
+*                 IT_HYPERLINK             =
+*                 IT_ADD_FIELDCAT          =
+*                 IT_EXCEPT_QINFO          =
+*                 IR_SALV_FULLSCREEN_ADAPTER        =
+*   IMPORTING
+*                 E_EXIT_CAUSED_BY_CALLER  =
+*                 ES_EXIT_CAUSED_BY_USER   =
+                TABLES
+                  t_outtab                 = it_output
+                EXCEPTIONS
+                  program_error            = 1
+                  OTHERS                   = 2.
+              IF sy-subrc <> 0.
+* Implement suitable error handling here
+              ENDIF.
+              CLEAR wa_layout.
+            ELSE.
+              MESSAGE text-001 TYPE 'I'.
+            ENDIF.
+* Implement suitable error handling here
+        ENDCASE.
+      ENDIF.
+
+      CLEAR lv_lines.
+
+
+    WHEN 'UPDATE'.
+
+      DATA :gst_item_hedx     TYPE bapisdh1x.
+      IF it_output is NOT INITIAL.
+
+      SELECT vbeln posnr FROM vbap INTO TABLE it_chkbox FOR ALL ENTRIES IN it_output
+                               WHERE vbeln eq it_output-vbeln and posnr eq it_output-posnr and uepos eq '0'.
+        ENDIF.
+* Filtering the items which are dependent
+      LOOP AT it_output ASSIGNING <fs_output>.
+        READ TABLE it_chkbox with key posnr = <fs_output>-posnr vbeln = <fs_output>-vbeln TRANSPORTING NO FIELDS .
+        IF sy-subrc = 0.
+          CONTINUE.
+        ELSE.
+          <fs_output>-checkbox = ' '.
+          v_count = v_count + 1.
+
+        ENDIF.
+        CLEAR <fs_output>.
+
+      ENDLOOP.
+      refresh it_chkbox.
+      SORT it_output BY vbeln.
+      LOOP AT it_output INTO ls_output.
+
+        IF ls_output-checkbox = 'X'.
+
+*   (Order Header Level)
+*   Setting the update flag at order header level to update mode.
+          gst_item_hedx-updateflag = 'U'.
+
+*   (Order Item Level)
+*   Setting of the material number(MATNR) at order item level.
+          gst_item_in-material = ls_output-matnr.
+
+*   Setting of the item number(POSNR) at order item level.
+          gst_item_in-itm_number  = ls_output-posnr.
+          gst_item_inx-itm_number = ls_output-posnr.
+
+*   Setting of the reason for rejection(ABGRU) at order item level.
+          gst_item_in-reason_rej  = ls_output-abgru.
+          gst_item_inx-reason_rej = 'X'.
+
+*   Setting the update flag at order item level to update mode.
+          gst_item_inx-updateflag = 'U'.
+
+*   BAPI items level tables:
+          APPEND:
+            gst_item_in  TO gt_item_in,
+            gst_item_inx TO gt_item_inx.
+          CLEAR : gst_item_in,gst_item_inx.
+
+*   Calling BAPI to update reason for rejection in the selected sales order.
+          CALL FUNCTION 'BAPI_SALESORDER_CHANGE'
+            EXPORTING
+              salesdocument    = ls_output-vbeln
+              order_header_inx = gst_item_hedx
+            TABLES
+              return           = gt_return
+              order_item_in    = gt_item_in
+              order_item_inx   = gt_item_inx.
+*   Preparing the result message.
+          CONCATENATE ls_output-vbeln   " Sales Order Number
+                      ls_output-posnr   " Item Number
+                 INTO gv_msg            " Message
+         SEPARATED BY space.            " Space
+          REFRESH :gt_item_in,gt_item_inx.
+*   Check if at least one error was raised by the BAPI. Loop inside
+*   loop is not advise, however, the return table will contains small
+*   amount of entries. We can use that for our demo.
+
+          LOOP AT gt_return TRANSPORTING NO FIELDS
+          WHERE type EQ 'E'
+             OR type EQ 'A'.
+
+*     Exit and rollback changes.
+            EXIT.
+
+          ENDLOOP.
+*   If error found, rollback database changes.
+          IF sy-subrc EQ 0.
+
+*     Rollback changes.
+            CALL FUNCTION 'BAPI_TRANSACTION_ROLLBACK'.
+
+*     Preparing error message.
+            CONCATENATE gv_msg        "Sales Order and Item Number
+                        gc_error      "Error Message
+                   INTO gv_msg
+           SEPARATED BY space.
+
+*     Output message.
+*            WRITE / GV_MSG.
+            MESSAGE gv_msg TYPE 'E'.
+            EXIT.
+
+            v_flag = 'N'.
+*   Else, no error found, commit database changes.
+
+          ELSE.
+
+            v_count = v_count + 1.
+**<< Begin of insert by vijay on 06/19/2018
+            IF v_flag IS INITIAL.
+              CALL FUNCTION 'BAPI_TRANSACTION_COMMIT'
+                EXPORTING
+                  wait = 'X'
+*          IMPORTING
+*                 RETURN        =
+                .
+**>> End of insert by vijay on 06/19/2018
+
+            ENDIF.
+
+          ENDIF.
+        ENDIF.
+        REFRESH gt_return .
+*        REFRESH : GT_ITEM_IN,GT_ITEM_INX.
+
+
+      ENDLOOP.
+
+      IF v_count > 0.
+        v_text1 = v_count.
+
+        CONCATENATE v_text1 gc_success INTO  v_text.
+        CLEAR v_count.
+
+        MESSAGE v_text  TYPE 'I'.
+        CLEAR v_count.
+
+      ENDIF.
+      REFRESH : gt_item_in,gt_item_inx.
+
+  ENDCASE.
+
+  CLEAR v_count.
+
+
+ENDFORM.
+
+FORM set_pf_status USING rt_extab TYPE slis_t_extab.
+
+  SET PF-STATUS 'Z_STATUS'.
+
+ENDFORM.
+*&---------------------------------------------------------------------*
+*&      Form  TABLE_REJ
+*&---------------------------------------------------------------------*
+*       text
+*----------------------------------------------------------------------*
+*  -->  p1        text
+*  <--  p2        text
+*----------------------------------------------------------------------*
+FORM table_rej .
+  SELECT abgru bezei FROM tvagt INTO TABLE it_rej WHERE spras = 'E'.
+  IF sy-subrc = 0.
+*     DESCRIBE TABLE IT_REJ LINES LV_LINES.
+  ENDIF.
+
+ENDFORM.

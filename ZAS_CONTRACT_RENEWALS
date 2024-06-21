@@ -1,0 +1,1965 @@
+REPORT zas_contract_renewals.
+*****************************************************************************************************
+* Report       : ZUPDATE_CON_ENDDATE_ACTDATE                                                        *
+* Title        : Updating contract enddate and aciton date                                          *
+* Programmer   : Vykuntarao tangudu                                                                 *
+* Date Written : 04/02/2019                                                                        *
+*****************************************************************************************************
+* Description  : This report is used to update the contract enddate and action date based on
+*action date and also to update the enddate for items                  *
+*                                                                                                   *
+*****************************************************************************************************
+*                Maintenance / Enhancements                                                         *
+*---------------------------------------------------------------------------------------------------*
+* Programmer   : Date       : Description                                                           *
+*---------------------------------------------------------------------------------------------------*
+
+*****************************************************************************************************
+*structure declaration
+TYPES: BEGIN OF ty_input,
+         vbeln   TYPE vbeln,
+         kunnr   TYPE vbak-kunnr,
+         auart   TYPE vbak-auart,
+         objnr   TYPE vbak-objnr,
+         zzboxes TYPE vbak-zzboxes,
+         venddat TYPE veda-venddat,
+         vaktsch TYPE veda-vaktsch,
+         vasda   TYPE veda-vasda,
+         vasdr   TYPE veda-vasdr,
+         vendreg TYPE veda-vendreg,
+         vinsdat TYPE veda-vinsdat,
+         vkuesch TYPE veda-vkuesch,
+         vkuegru TYPE  veda-vkuegru,
+*         flag         TYPE c,
+       END OF ty_input.
+TYPES: BEGIN OF ty_input_m,
+         vbelv   TYPE vbfa-vbelv,
+         venddat TYPE veda-venddat,
+         vbeln   TYPE vbfa-vbeln,
+       END OF ty_input_m.
+TYPES: BEGIN OF ty_veda_m,
+         vbeln   TYPE vbfa-vbelv,
+         vbegdat TYPE veda-venddat,
+         venddat TYPE veda-venddat,
+         vendreg TYPE veda-vendreg,
+       END OF ty_veda_m.
+TYPES :BEGIN OF ty_dc_dv,
+         vbeln TYPE vbak-vbeln,
+         vtweg TYPE vbak-vtweg,
+         spart TYPE vbak-spart,
+       END OF ty_dc_dv.
+
+TYPES: BEGIN OF st_vbpa,
+         vbeln TYPE vbpa-vbeln,
+         parvw TYPE vbpa-parvw,
+         kunnr TYPE vbpa-kunnr,
+       END OF st_vbpa.
+TYPES: BEGIN OF ty_output,
+         checkbox  TYPE c,
+         vbeln     TYPE vbeln,
+         kunnr     TYPE kunnr,
+         kunnr_sp  TYPE  kunnr,
+         kunnr_py  TYPE kunnr,
+         venddat_i TYPE vndat_veda,
+         vasda_i   TYPE vndat_veda,
+         venddat   TYPE vndat_veda,
+         vasda     TYPE vndat_veda,
+         zzboxes   TYPE vbak-zzboxes,
+         status    TYPE string,
+       END OF ty_output.
+TYPES: BEGIN OF ty_output_m,
+         checkbox TYPE c,
+         vbelv    TYPE vbfa-vbelv,
+         venddat  TYPE veda-venddat,
+         vendreg  TYPE veda-vendreg,
+         vbeln    TYPE vbfa-vbeln,
+         status   TYPE string,
+       END OF ty_output_m .
+DATA: lt_output TYPE TABLE OF ty_output,
+      ls_output TYPE ty_output.
+DATA :lt_output_m TYPE TABLE OF ty_output_m,
+      ls_output_m TYPE ty_output_m.
+* Variable declaration
+DATA : v_ren          TYPE veda-vaktsch VALUE 'Z001',
+       v_evg          TYPE veda-vaktsch VALUE 'ZEVG',
+       v_flag         TYPE c,
+       lv_usr_status1 TYPE j_txt04 VALUE 'REP',
+
+       gr_document    TYPE REF TO cl_document_bcs,
+       v_rule         TYPE vasdr.
+
+
+TYPES :BEGIN OF ty_status,
+         low TYPE zut_variables-low,
+       END OF ty_status.
+
+*Bapideclaraion
+DATA: order_header_in  TYPE bapisdh1,
+      order_header_inx TYPE bapisdh1x,
+      it_bapiret2      TYPE TABLE OF bapiret2,
+      ls_bapiret2      TYPE bapiret2,
+      it_bapictr       TYPE TABLE OF bapictr, " OCCURS 0 WITH HEADER LINE,
+      wa_bapictr       TYPE bapictr,
+      it_bapictrx      TYPE TABLE OF bapictrx, " OCCURS 0 WITH HEADER LINE.
+      wa_bapictrx      TYPE bapictrx,
+      it_bapisditm     TYPE TABLE OF bapisditm, "OCCURS 0 WITH HEADER LINE,
+      wa_bapisditm     TYPE bapisditm,
+      it_bapisditmx    TYPE TABLE OF bapisditmx, " OCCURS 0 WITH HEADER LINE,
+      wa_bapisditmx    TYPE bapisditmx,
+      ls_extensionin   LIKE bapiparex,
+      lt_extensionin   TYPE TABLE OF bapiparex,
+      ls_extensionex   TYPE bapiparex,
+      lt_extensionex   TYPE TABLE OF bapiparex.
+DATA : ls_bape_vbak  TYPE bape_vbak,
+       ls_bape_vbakx LIKE bape_vbakx,
+       ls_boxes      TYPE i.
+DATA : it_status    TYPE TABLE OF ty_status,
+       ls_status    TYPE ty_status,
+       it_db_status TYPE TABLE OF tj30t,
+       ls_db_status TYPE tj30t.
+*-------------------------------------------------------------------------------------------------*
+*   TABLES
+*-------------------------------------------------------------------------------------------------*
+TABLES :vbak,veda,vbpa.
+DATA :           it_data     TYPE TABLE OF ty_input,
+                 it_data_m   TYPE TABLE OF ty_input_m,
+                 it_veda_m   TYPE TABLE OF ty_veda_m,
+                 it_dc_dv    TYPE TABLE OF ty_dc_dv,
+                 it_data_tmp TYPE TABLE OF ty_input,
+                 ls_data     TYPE ty_input,
+                 ls_data_m   TYPE ty_input_m,
+                 ls_veda_m   TYPE ty_veda_m,
+                 ls_dc_dv    TYPE  ty_dc_dv,
+                 lv_months   TYPE t5a4a-dlymo,
+                 lt_kunnr    TYPE TABLE OF st_vbpa,
+                 ls_kunnr    TYPE st_vbpa,
+                 lt_vbpa_1   TYPE TABLE OF st_vbpa,
+                 ls_vbpa     TYPE st_vbpa,
+                 lt_vbpa_2   TYPE TABLE OF st_vbpa,
+                 lt_vbpa_3   TYPE TABLE OF st_vbpa.
+* Work area declaration
+
+DATA : lv_actdt TYPE p0001-begda.
+DATA: s_user_address       TYPE bapiaddr3.
+FIELD-SYMBOLS : <ls_data>   TYPE ty_input,
+                <ls_output> TYPE ty_output.
+**Field Catalog declaration for ALV
+DATA : lt_fcat    TYPE slis_t_fieldcat_alv,
+       ls_fcat    TYPE slis_fieldcat_alv,
+       ls_layout  TYPE slis_layout_alv,
+       t_messages TYPE TABLE OF bapiret2,
+       s_messages TYPE bapiret2.
+*ranges declaration
+DATA: r_vendreg  TYPE RANGE OF veda-vendreg,  "range table
+      t_vendreg  TYPE RANGE OF veda-vendreg,  "range table
+      t_auart    TYPE RANGE OF vbak-auart,    "range table for document type
+      wa_vendreg LIKE LINE OF r_vendreg,     "work area for range table
+      wa_auart   LIKE LINE OF t_auart ,     "work area for range table
+      r_vbeln    TYPE RANGE OF vbak-vbeln,  "range table
+      wa_vbeln   LIKE LINE OF r_vbeln.     "work area for range table
+
+
+*email declarations
+DATA :gr_send_request  TYPE REF TO cl_bcs,
+      gr_sender        TYPE REF TO cl_sapuser_bcs,
+      gr_recipient     TYPE REF TO if_recipient_bcs,
+      gr_table         TYPE REF TO cl_salv_table,
+      lv_date          TYPE char10,
+      lv_time          TYPE char10,
+      lv_string        TYPE string,
+      lv_binary        TYPE solix_tab,
+      size             TYPE so_obj_len,
+      lt_heading       TYPE bcsy_text,
+      lv_title         TYPE so_obj_des,
+      gv_sent_to_all   TYPE os_boolean,
+      gr_bcs_exception TYPE REF TO cx_bcs,
+      gr_columns       TYPE REF TO cl_salv_columns_table,
+      gr_column        TYPE REF TO cl_salv_column_table,
+      v_tabix          TYPE sy-tabix.
+DATA: rg_doc_set TYPE TABLE OF rsis_s_range.
+CONSTANTS : gc_crlf TYPE c VALUE cl_bcs_convert=>gc_crlf,
+            gc_tab  TYPE c VALUE cl_bcs_convert=>gc_tab,
+            c_ag    TYPE char02 VALUE 'AG',
+            c_rg    TYPE char02 VALUE 'RG',
+            c_we    TYPE char02 VALUE 'WE',
+            c_5app  TYPE char04 VALUE '5APP',
+            c_8aba  TYPE char04 VALUE '8ABA',
+            c_zevg  TYPE char04 VALUE 'ZEVG',
+            c_7nop  TYPE char04 VALUE '7NOP'.
+DATA: it_return   TYPE bapiret2,
+      wa_tlines   TYPE tline,
+      it_tlines   TYPE TABLE OF tline , "OCCURS 0 WITH HEADER LINE,
+      it_tlines_1 TYPE TABLE OF tline. "LIKE tline OCCURS 0 WITH HEADER LINE.
+DATA : x_header TYPE thead.
+*-------------------------------------------------------------------------------------------------*
+*   DESIGNING OF THE SELECTION SCREEN
+*-------------------------------------------------------------------------------------------------*
+SELECTION-SCREEN BEGIN OF SCREEN 100 AS SUBSCREEN.
+*                 WITH FRAME TITLE TEXT-041.
+
+SELECT-OPTIONS:s_vbeln FOR vbak-vbeln,
+              s_ag FOR vbpa-kunnr,
+              s_rg FOR vbpa-kunnr,
+              s_we FOR vbpa-kunnr,
+              s_vkorg FOR vbak-vkorg.
+PARAMETERS :p_vtweg TYPE vbak-vtweg,
+            p_spart TYPE vbak-spart.
+SELECT-OPTIONS:s_vendat FOR veda-venddat OBLIGATORY,
+               s_email FOR s_user_address-e_mail NO INTERVALS.
+PARAMETERS:    p_send  AS CHECKBOX DEFAULT space,
+               p_run_c AS CHECKBOX DEFAULT space.
+
+SELECTION-SCREEN END OF SCREEN 100.
+
+SELECTION-SCREEN BEGIN OF SCREEN 200 AS SUBSCREEN.
+SELECT-OPTIONS:t_vbeln FOR vbak-vbeln,
+
+
+               t_begdat FOR veda-vbegdat OBLIGATORY.
+*               S_EMAIL FOR S_USER_ADDRESS-E_MAIL NO INTERVALS.
+PARAMETERS:    p_send_m AS CHECKBOX DEFAULT space,
+               p_run_m  AS CHECKBOX DEFAULT space.
+
+SELECTION-SCREEN END OF SCREEN 200.
+SELECTION-SCREEN: BEGIN OF TABBED BLOCK mytab FOR 12 LINES,
+                  TAB (20) ctab1 USER-COMMAND ctab1,
+                  TAB (20) ctab2 USER-COMMAND ctab2,
+                  END OF BLOCK mytab.
+SELECTION-SCREEN BEGIN OF BLOCK a.
+PARAMETERS:
+
+  p_update AS CHECKBOX DEFAULT space.
+SELECTION-SCREEN END OF BLOCK a.
+
+INITIALIZATION.
+  CALL FUNCTION 'BAPI_USER_GET_DETAIL'
+    EXPORTING
+      username = sy-uname
+    IMPORTING
+      address  = s_user_address
+    TABLES
+      return   = t_messages.
+
+  s_email-low = s_user_address-e_mail.
+  s_email-sign = 'I'.
+  s_email-option = 'EQ'.
+  APPEND s_email.
+
+* Preparing range table for enddate rule
+
+  wa_vendreg-sign   = 'I'.   "
+  wa_vendreg-option = 'EQ'.
+  wa_vendreg-low    = 'SL'.
+  APPEND wa_vendreg TO r_vendreg.
+
+  wa_vendreg-low    = 'SF'.
+  APPEND wa_vendreg TO r_vendreg.
+  wa_vendreg-low    = 'SZ'.
+  APPEND wa_vendreg TO r_vendreg.
+  wa_vendreg-low    = 'SS'.
+  APPEND wa_vendreg TO r_vendreg.
+  wa_vendreg-low    = 'SC'.
+  APPEND wa_vendreg TO r_vendreg.
+
+
+  wa_vendreg-low    = 'ST'.
+  APPEND wa_vendreg TO t_vendreg.
+  CLEAR wa_vendreg.
+
+* * Preparing range table for document type
+  wa_auart-sign   = 'I'.   "
+  wa_auart-option = 'EQ'.
+  wa_auart-low    = 'ZAM1'.
+  APPEND wa_auart TO t_auart.
+  CLEAR wa_auart.
+
+  wa_vbeln-sign   = 'I'.   "number range for VBELn
+  wa_vbeln-option = 'BT'.
+  wa_vbeln-low    = '0440000000'.
+  wa_vbeln-high    = '0449999999'.
+  APPEND wa_vbeln TO r_vbeln.
+
+  SELECT sign opti low FROM zut_variables APPENDING TABLE rg_doc_set   ##TOO_MANY_ITAB_FIELDS
+  WHERE process = 'ASCONTRACTTYPES' AND name = 'DOC_TYPE'.
+  IF sy-subrc = 0.
+
+  ENDIF.
+
+  ctab1 = text-041.
+  ctab2 = text-013.
+  mytab-prog = sy-repid.
+  mytab-dynnr = 100.
+  mytab-activetab = 'CTAB1'.
+
+AT SELECTION-SCREEN.
+
+  CASE sy-dynnr.
+    WHEN 1000.
+      CASE sy-ucomm.
+        WHEN 'CTAB1'.
+          mytab-dynnr = 100.
+        WHEN 'CTAB2'.
+          mytab-dynnr = 200.
+      ENDCASE.
+  ENDCASE.
+
+START-OF-SELECTION.
+
+  IF  mytab-dynnr = 100 OR sy-batch = abap_true.
+    IF p_run_c IS NOT INITIAL.
+      PERFORM get_data.
+      PERFORM process_data.
+      IF p_send IS NOT INITIAL AND sy-batch = abap_true. "for back groundjobs.
+        IF lt_output IS NOT INITIAL.  " Added the condition as we need to send the email only if records exists in the file
+          "as per SCTASK0447960 on 10/12/2020 for DS0K959532
+          PERFORM send_email.
+        ENDIF.
+      ENDIF.
+    ENDIF.
+  ENDIF.
+  IF  mytab-dynnr = 200 OR sy-batch = abap_true .
+
+    IF p_run_m IS NOT INITIAL.
+      PERFORM get_data_master.
+      PERFORM process_data_m.
+      "for back groundjobs.
+      IF p_send_m IS NOT INITIAL AND v_flag = abap_true AND
+            p_update IS  INITIAL.
+        IF lt_output_m IS NOT INITIAL.  " Added the condition as we need to send the email only if records exists in the file
+          "as per SCTASK0447960 on 10/12/2020 for DS0K959532
+          PERFORM send_email_m.
+          CLEAR v_flag.
+        ENDIF.
+      ENDIF.
+    ENDIF.
+  ENDIF.
+
+
+END-OF-SELECTION.
+  IF sy-batch NE abap_true.  "Fore ground
+    IF  mytab-dynnr = 100 .
+      PERFORM display_data.
+    ELSE.
+
+      PERFORM display_data_m .
+    ENDIF.
+  ELSE.                      "Back ground
+    IF p_run_c  IS NOT INITIAL .
+      PERFORM display_data.
+    ENDIF.
+    IF p_run_m  IS NOT INITIAL.
+      PERFORM display_data_m .
+    ENDIF.
+
+  ENDIF.
+
+
+
+*&---------------------------------------------------------------------*
+*&      Form  GET_DATA
+*&---------------------------------------------------------------------*
+*       text
+*----------------------------------------------------------------------*
+*  -->  p1        text
+*  <--  p2        text
+*----------------------------------------------------------------------*
+FORM get_data .
+
+  SELECT a~vbeln a~kunnr a~auart a~objnr a~zzboxes b~venddat b~vaktsch  b~vasda b~vasdr b~vendreg b~vinsdat b~vkuesch
+                             b~vkuegru
+                            FROM vbak AS a
+                           INNER JOIN veda AS b ON a~vbeln EQ b~vbeln
+*                           INNER JOIN VBAK AS C ON A~VBELN EQ C~VBELN
+*                           INNER JOIN KNVP AS C ON A~KUNNR EQ C~KUNNR
+                           INTO TABLE it_data
+                           WHERE  b~vaktsch IN  ( 'Z001','ZEVG' ) AND a~vbeln IN r_vbeln AND
+  a~auart IN rg_doc_set   AND         "Document types
+  b~vposn EQ ' ' AND a~vbeln IN s_vbeln AND a~kunnr IN s_ag  AND b~venddat IN s_vendat
+  AND a~vkorg IN s_vkorg .
+  "A~VTWEG EQ P_VTWEG AND A~SPART EQ P_SPART "AND
+*                            C~KUNN2 IN S_PKUNNR AND C~PARVW EQ 'RG'.
+  IF sy-subrc = 0.
+    SORT it_data BY vbeln.
+  ENDIF.
+
+* selectiong the docs for sold to ship to and bill to "Sold to
+  IF it_data  IS NOT INITIAL .
+*    IF S_AG IS NOT INITIAL.
+    SELECT vbeln parvw kunnr FROM vbpa INTO TABLE lt_vbpa_1 FOR ALL ENTRIES IN it_data  WHERE
+    vbeln  EQ it_data-vbeln AND kunnr IN s_ag AND parvw = c_ag.         "Sold to
+    IF sy-subrc = 0.
+
+    ENDIF.
+*    ENDIF.
+*    IF S_RG IS NOT INITIAL.
+    SELECT vbeln parvw kunnr FROM vbpa INTO TABLE  lt_vbpa_2 FOR ALL ENTRIES IN it_data WHERE
+    vbeln  EQ it_data-vbeln AND kunnr IN s_rg AND parvw = c_rg.       "payer
+    IF sy-subrc = 0.
+
+    ENDIF.
+*    ENDIF.
+*    IF S_WE IS NOT INITIAL.
+    SELECT vbeln parvw kunnr FROM vbpa INTO TABLE  lt_vbpa_3 FOR ALL ENTRIES IN it_data WHERE
+    vbeln  EQ it_data-vbeln AND kunnr IN s_we AND parvw = c_we.   "Ship to
+    IF sy-subrc = 0.
+
+    ENDIF.
+*    ENDIF.
+
+  ENDIF.
+* Distribution channel and division data.
+  IF it_data IS NOT INITIAL.
+    SELECT vbeln vtweg spart FROM vbak INTO TABLE it_dc_dv FOR ALL ENTRIES IN it_data
+    WHERE vbeln EQ it_data-vbeln.
+    IF sy-subrc = 0.
+*Filtering based on distribution channel.
+      it_data_tmp = it_data.
+      IF p_vtweg IS NOT INITIAL.
+        LOOP AT it_data_tmp INTO ls_data .
+          READ TABLE it_dc_dv INTO ls_dc_dv WITH KEY vbeln = ls_data-vbeln.
+          IF sy-subrc = 0.
+            IF ls_dc_dv-vtweg EQ p_vtweg.
+            ELSE.
+              DELETE it_data WHERE vbeln EQ ls_data-vbeln.
+            ENDIF.
+
+          ENDIF.
+
+        ENDLOOP.
+
+      ENDIF.
+*Filtering based on division
+      IF p_spart IS NOT INITIAL.
+        LOOP AT it_data_tmp INTO ls_data .
+          READ TABLE it_dc_dv INTO ls_dc_dv WITH KEY vbeln = ls_data-vbeln.
+          IF sy-subrc = 0.
+            IF ls_dc_dv-spart EQ p_spart.
+            ELSE.
+              DELETE it_data WHERE vbeln EQ ls_data-vbeln.
+            ENDIF.
+
+          ENDIF.
+
+        ENDLOOP.
+      ENDIF.
+
+    ENDIF.
+
+  ENDIF.
+
+*Filtering
+  it_data_tmp = it_data.
+  LOOP AT it_data_tmp INTO ls_data .
+*    V_TABIX = SY-TABIX.
+    IF s_ag IS NOT INITIAL.
+      READ TABLE lt_vbpa_1 INTO ls_vbpa WITH KEY vbeln = ls_data-vbeln.
+      IF sy-subrc = 0.
+      ELSE.
+        DELETE it_data WHERE vbeln EQ ls_data-vbeln.
+
+      ENDIF.
+    ENDIF.
+*    CLEAR LS_DATA.
+    IF s_rg IS NOT INITIAL.
+      READ TABLE lt_vbpa_2 INTO ls_vbpa WITH KEY vbeln = ls_data-vbeln.
+      IF sy-subrc = 0.
+
+      ELSE.
+        DELETE it_data WHERE vbeln EQ ls_data-vbeln.
+      ENDIF.
+    ENDIF.
+*    CLEAR LS_DATA.
+    IF s_we IS NOT INITIAL.
+      READ TABLE lt_vbpa_3 INTO ls_vbpa WITH KEY vbeln = ls_data-vbeln.
+      IF sy-subrc = 0.
+      ELSE..
+        DELETE it_data WHERE vbeln EQ ls_data-vbeln.
+      ENDIF.
+    ENDIF.
+  ENDLOOP.
+
+* Status values
+  SELECT low FROM zut_variables INTO TABLE it_status WHERE name = 'STATCODE'. "Status profile
+  IF sy-subrc = 0.
+
+  ENDIF.
+  CLEAR ls_data.
+  CLEAR ls_vbpa.
+
+
+ENDFORM.
+*&---------------------------------------------------------------------*
+*&      Form  PROCESS_DATA
+*&---------------------------------------------------------------------*
+*       text
+*----------------------------------------------------------------------*
+*  -->  p1        text
+*  <--  p2        text
+*----------------------------------------------------------------------*
+FORM process_data .
+
+  LOOP AT it_data INTO ls_data.
+
+    ls_output-vasda_i  =  ls_data-vasda .
+    ls_output-venddat_i  =  ls_data-venddat ."WA_BAPICTR-CON_EN_DAT
+*    IF LS_DATA-VENDDAT IS NOT INITIAL OR P_UPDATE IS INITIAL.
+    IF ls_data-vkuesch IS NOT INITIAL AND ls_data-vkuegru IS NOT INITIAL.
+      CLEAR : ls_data-vasda,ls_data-venddat.
+      ls_output-status  =  text-034. "'Contract is Terminated , please check the data' .
+      CONCATENATE ls_output-status '' INTO ls_output-status SEPARATED BY space .
+    ELSE.
+      IF ls_data-vendreg = 'SU'.                          "Rule for contract end date
+        IF ls_data-vaktsch = 'ZEVG'.                      " Ever green contract
+
+
+          PERFORM date_counter USING '12' CHANGING ls_data-vasda.
+          PERFORM date_counter USING '12' CHANGING ls_data-venddat.
+          PERFORM update_ren USING ls_data."LS_DATA-VENDDAT LS_DATA-VASDR LS_DATA-VASDA
+*                                   LS_DATA-VBELN LS_DATA-ZZBOXES .
+        ELSE.
+          CLEAR : ls_data-vasda,ls_data-venddat.
+          ls_output-status  =  text-006. "'Please check the data.Contract end date rule is SU and action procedure is' .
+          CONCATENATE ls_output-status ls_data-vaktsch INTO ls_output-status SEPARATED BY space .
+          "&. "value.
+*          <LS_DATA>-FLAG = ABAP_TRUE.
+        ENDIF.
+
+      ELSE.
+        IF ls_data-vendreg IN r_vendreg. "'SL'. "SL, SF, SZ, SS, SC                                  "Renewal contract
+          IF ls_data-vinsdat IS NOT INITIAL.
+            PERFORM process_rules.
+
+          ELSE.
+            CLEAR : ls_data-vasda,ls_data-venddat.
+            ls_output-status  =  text-008.
+            CONCATENATE ls_output-status ls_data-vendreg text-009 INTO ls_output-status SEPARATED BY space .
+          ENDIF.
+        ELSE.
+          PERFORM process_rules.
+
+
+        ENDIF.
+      ENDIF.
+
+
+    ENDIF.
+
+    PERFORM appending_output.
+    CLEAR ls_boxes.
+
+  ENDLOOP.
+
+
+
+ENDFORM.
+*&---------------------------------------------------------------------*
+*&      Form  UPDATE_REN
+*&---------------------------------------------------------------------*
+*       text
+*----------------------------------------------------------------------*
+*  -->  p1        text
+*  <--  p2        text
+*----------------------------------------------------------------------*
+FORM update_ren  USING  ls_data  TYPE ty_input."LS_DATA-VENDDAT LS_DATA-VASDR LS_DATA-VASDA
+  "LS_DATA-VBELN LS_DATA-ZZBOXES .
+  IF p_update IS INITIAL.
+
+    wa_bapictr-con_en_dat = ls_data-venddat .
+*    WA_BAPICTR-ACT_DATRUL = LS_DATA-VASDR.
+*    WA_BAPICTR-ACTION_DAT = LS_DATA-VASDA.
+
+    wa_bapictrx-updateflag = abap_true.
+    wa_bapictrx-con_en_dat = abap_true.
+*    WA_BAPICTRX-ACTION_DAT = ABAP_TRUE.
+*    WA_BAPICTRX-ACT_DATRUL = ABAP_TRUE.
+
+    ls_bape_vbak-vbeln          = ls_data-vbeln.
+    CONDENSE ls_data-zzboxes.
+    ls_bape_vbak-zzboxes =  ls_data-zzboxes.
+    PERFORM map_extension USING 'BAPE_VBAK' 'LS_BAPE_VBAK'.      "BAPI structure for additional fields
+
+    ls_bape_vbakx-vbeln          = ls_data-vbeln.
+    ls_bape_vbakx-zzboxes  = abap_true.
+    ls_extensionex-structure  = 'BAPE_VBAKX'.
+    PERFORM map_extension USING 'BAPE_VBAKX' 'LS_BAPE_VBAKX'.        "BAPI structure for additional fields
+
+    APPEND wa_bapictr TO it_bapictr.
+    CLEAR wa_bapictr.
+
+    APPEND wa_bapictrx TO it_bapictrx.
+    CLEAR wa_bapictrx.
+
+    order_header_inx-updateflag = 'U'.
+    CALL FUNCTION 'BAPI_CUSTOMERCONTRACT_CHANGE'
+      EXPORTING
+        salesdocument       = ls_data-vbeln
+        contract_header_in  = order_header_in
+        contract_header_inx = order_header_inx
+*       SIMULATION          =
+*       BEHAVE_WHEN_ERROR   = ' '
+*       INT_NUMBER_ASSIGNMENT       = ' '
+*       LOGIC_SWITCH        =
+*       NO_STATUS_BUF_INIT  = ' '
+      TABLES
+        return              = it_bapiret2
+*       CONTRACT_ITEM_IN    =
+*       CONTRACT_ITEM_INX   =
+*       PARTNERS            =
+*       PARTNERCHANGES      =
+*       PARTNERADDRESSES    =
+*       CONDITIONS_IN       =
+*       CONDITIONS_INX      =
+*       CONTRACT_CFGS_REF   =
+*       CONTRACT_CFGS_INST  =
+*       CONTRACT_CFGS_PART_OF       =
+*       CONTRACT_CFGS_VALUE =
+*       CONTRACT_CFGS_BLOB  =
+*       CONTRACT_CFGS_VK    =
+*       CONTRACT_CFGS_REFINST       =
+*       CONTRACT_TEXT       =
+        contract_data_in    = it_bapictr
+        contract_data_inx   = it_bapictrx
+*       CONTRACT_KEYS       =
+        extensionin         = lt_extensionin
+*       EXTENSIONEX         =
+      .
+
+
+
+*    IF SY-SUBRC <> 0.
+** Implement suitable error handling here
+*      LOOP AT IT_BAPIRET2 INTO LS_BAPIRET2 .
+*        CONCATENATE LS_BAPIRET2-MESSAGE LS_OUTPUT-STATUS INTO LS_OUTPUT-STATUS.
+*      ENDLOOP.
+*      CLEAR LS_BAPIRET2.
+
+*    ELSE.
+    READ TABLE it_bapiret2 INTO ls_bapiret2 WITH KEY type = 'E'.
+    IF sy-subrc = 0.
+      LOOP AT it_bapiret2 INTO ls_bapiret2 .
+        CONCATENATE ls_bapiret2-message ls_output-status INTO ls_output-status SEPARATED BY space.
+      ENDLOOP.
+      CLEAR ls_bapiret2.
+*        CLEAR LS_DATA-VENDDAT.
+    ELSE.
+
+
+      PERFORM update_status.
+
+      CALL FUNCTION 'BAPI_TRANSACTION_COMMIT'
+        EXPORTING
+          wait = 'X'
+*       IMPORTING
+*         RETURN        = it_return
+        .
+*        WAIT UP TO 10 SECONDS.
+
+
+      ls_output-status  =  text-005 .
+
+
+      PERFORM save_text  .
+    ENDIF.
+
+*    ENDIF.
+
+  ENDIF.
+  REFRESH lt_extensionin. "added by vykunt to clear the data on 7/1/2020
+
+  REFRESH: it_bapictrx,it_bapictr.
+  CLEAR :lv_actdt.
+ENDFORM.
+*&---------------------------------------------------------------------*
+*&      Form  UPDATE_STATUS
+*&---------------------------------------------------------------------*
+*       text
+*----------------------------------------------------------------------*
+*  -->  p1        text
+*  <--  p2        text
+*----------------------------------------------------------------------*
+FORM update_status." USING ls_data .
+* Read status
+  CALL FUNCTION 'Z_SSM_STATUS_MAINTAIN'
+    EXPORTING
+      objnr                    = ls_data-objnr
+*     usr_status               = lv_usr_status1
+      update_mode              = 'R'
+    TABLES
+      validstatus              = it_db_status
+    EXCEPTIONS
+      status_update_failure    = 1
+      status_change_failure    = 2
+      status_value_not_found   = 3
+      input_status_not_on_docu = 4
+      object_not_found         = 5
+      OTHERS                   = 6.
+  IF it_db_status IS NOT INITIAL.
+    READ TABLE it_db_status INTO ls_db_status WITH KEY txt04 = c_7nop.  " Checking 7nop Status
+    IF sy-subrc NE 0.
+      LOOP AT it_db_status INTO ls_db_status.
+        READ TABLE it_status INTO ls_status WITH KEY low = ls_db_status-txt04.
+        IF sy-subrc = 0 .
+          IF ls_status-low = c_5app OR ls_status-low = c_8aba .
+
+            CALL FUNCTION 'Z_SSM_STATUS_MAINTAIN'
+              EXPORTING
+                objnr                    = ls_data-objnr
+                usr_status               = ls_db_status-txt04
+                update_mode              = 'D'
+*      TABLES
+*               validstatus              = lt_validstatus
+              EXCEPTIONS
+                status_update_failure    = 1
+                status_change_failure    = 2
+                status_value_not_found   = 3
+                input_status_not_on_docu = 4
+                object_not_found         = 5
+                OTHERS                   = 6.
+
+
+          ENDIF.
+        ENDIF.
+      ENDLOOP.
+      CALL FUNCTION 'Z_SSM_STATUS_MAINTAIN'
+        EXPORTING
+          objnr                    = ls_data-objnr
+          usr_status               = lv_usr_status1
+          update_mode              = 'A'
+*      TABLES
+*         validstatus              = lt_validstatus
+        EXCEPTIONS
+          status_update_failure    = 1
+          status_change_failure    = 2
+          status_value_not_found   = 3
+          input_status_not_on_docu = 4
+          object_not_found         = 5
+          OTHERS                   = 6.
+
+    ENDIF.
+
+
+  ENDIF.
+
+ENDFORM.
+*&---------------------------------------------------------------------*
+*&      Form  DISPLAY_DATA
+*&---------------------------------------------------------------------*
+*       text
+*----------------------------------------------------------------------*
+*  -->  p1        text
+*  <--  p2        text
+*----------------------------------------------------------------------*
+FORM display_data .
+
+  CLEAR p_update.
+  REFRESH: lt_fcat[].
+
+  ls_fcat-fieldname = 'VBELN'.
+  ls_fcat-tabname = 'LT_OUTPUT'.
+  ls_fcat-row_pos = '1'.
+  ls_fcat-col_pos = '1'.
+  ls_fcat-seltext_l = 'Contract No'.
+  APPEND ls_fcat TO lt_fcat.
+  CLEAR ls_fcat.
+
+  ls_fcat-fieldname = 'KUNNR'.
+  ls_fcat-tabname = 'LT_OUTPUT'.
+  ls_fcat-row_pos = '1'.
+  ls_fcat-col_pos = '2'.
+  ls_fcat-seltext_l = 'Sold-to-party'.
+  APPEND ls_fcat TO lt_fcat.
+  CLEAR ls_fcat.
+
+  ls_fcat-fieldname = 'KUNNR_SP'.
+  ls_fcat-tabname = 'LT_OUTPUT'.
+  ls_fcat-row_pos = '1'.
+  ls_fcat-col_pos = '3'.
+  ls_fcat-seltext_l = 'Ship-to-party'.
+  APPEND ls_fcat TO lt_fcat.
+  CLEAR ls_fcat.
+
+  ls_fcat-fieldname = 'KUNNR_PY'.
+  ls_fcat-tabname = 'LT_OUTPUT'.
+  ls_fcat-row_pos = '1'.
+  ls_fcat-col_pos = '4'.
+  ls_fcat-seltext_l = 'Payer-party'.
+  APPEND ls_fcat TO lt_fcat.
+  CLEAR ls_fcat.
+
+
+  ls_fcat-fieldname = 'VENDDAT_I'.
+  ls_fcat-tabname = 'LT_OUTPUT'.
+  ls_fcat-row_pos = '1'.
+  ls_fcat-col_pos = '5'.
+  ls_fcat-seltext_l = 'Contract date'.
+  APPEND ls_fcat TO lt_fcat.
+  CLEAR ls_fcat.
+
+  ls_fcat-fieldname = 'VENDDAT'.
+  ls_fcat-tabname = 'LT_OUTPUT'.
+  ls_fcat-row_pos = '1'.
+  ls_fcat-col_pos = '6'.
+  ls_fcat-seltext_l = 'New Contract enddate'.
+  APPEND ls_fcat TO lt_fcat.
+  CLEAR ls_fcat.
+
+  ls_fcat-fieldname = 'STATUS'.
+  ls_fcat-tabname = 'LT_OUTPUT'.
+  ls_fcat-row_pos = '1'.
+  ls_fcat-col_pos = '7'.
+  ls_fcat-seltext_l = 'Status'.
+  APPEND ls_fcat TO lt_fcat.
+  CLEAR ls_fcat.
+
+  ls_layout-colwidth_optimize = abap_true.
+  ls_layout-zebra = abap_true.
+  ls_layout-box_fieldname = 'CHECKBOX'.
+  ls_layout-box_tabname = 'LT_OUTPUT'.
+
+  CALL FUNCTION 'REUSE_ALV_GRID_DISPLAY'
+    EXPORTING
+      i_callback_program       = sy-repid
+      i_callback_pf_status_set = 'PF_STATUS_SET'
+      i_callback_user_command  = 'USER_COMMAND'    " For Hotspot
+      is_layout                = ls_layout
+      it_fieldcat              = lt_fcat
+    TABLES
+      t_outtab                 = lt_output
+    EXCEPTIONS
+      program_error            = 1
+      OTHERS                   = 2.
+  IF sy-subrc <> 0.
+* Implement suitable error handling here
+  ENDIF.
+*  ENDIF.
+
+
+ENDFORM.
+*&---------------------------------------------------------------------*
+*&      Form  MAP_EXTENSION
+*&---------------------------------------------------------------------*
+*       text
+*----------------------------------------------------------------------*
+*      -->P_2244   text
+*      -->P_2245   text
+*----------------------------------------------------------------------*
+FORM map_extension  USING    VALUE(p_name)
+                             VALUE(p_struc).
+  DATA:          lv_len   TYPE i.
+  FIELD-SYMBOLS: <struc>  TYPE any.
+
+  ASSIGN (p_struc) TO <struc>.
+  CHECK sy-subrc = 0.
+
+  CLEAR ls_extensionin.
+  ls_extensionin-structure = p_name.
+
+  DESCRIBE FIELD ls_extensionin-structure LENGTH lv_len IN CHARACTER MODE.
+
+  CALL METHOD cl_abap_container_utilities=>fill_container_c
+    EXPORTING
+      im_value               = <struc>
+    IMPORTING
+      ex_container           = ls_extensionin+lv_len
+    EXCEPTIONS
+      illegal_parameter_type = 1
+      OTHERS                 = 2.
+
+  APPEND ls_extensionin TO lt_extensionin.
+ENDFORM.                    " MAP_EXTENSION
+*&---------------------------------------------------------------------*
+*&      Form  DATE_COUNTER
+*&---------------------------------------------------------------------*
+*       text
+*----------------------------------------------------------------------*
+*  -->  p1        text
+*  <--  p2        text
+*----------------------------------------------------------------------*
+FORM date_counter USING lv_months TYPE t5a4a-dlymo
+                  CHANGING fs  .
+  CALL FUNCTION 'RP_CALC_DATE_IN_INTERVAL'
+    EXPORTING
+      date      = fs
+      days      = '00'
+      months    = lv_months
+*     SIGNUM    = '+'
+      years     = '00'
+    IMPORTING
+      calc_date = fs.
+
+ENDFORM.
+*&---------------------------------------------------------------------*
+*&      Form  SEND_EMAIL
+*&---------------------------------------------------------------------*
+*       text
+*----------------------------------------------------------------------*
+*  -->  p1        text
+*  <--  p2        text
+*----------------------------------------------------------------------*
+FORM send_email .
+  CLEAR lv_string.
+  REFRESH lt_heading.
+  CLEAR lv_title.
+  CHECK s_email[] IS NOT INITIAL.
+  TRY.
+      "Create send request
+      gr_send_request = cl_bcs=>create_persistent( ).
+
+
+      "Email FROM...
+*      lv_from = 'donotreply@sabre.com'.
+      gr_sender = cl_sapuser_bcs=>create( sy-uname ).
+
+      "Add sender to send request
+      CALL METHOD gr_send_request->set_sender
+        EXPORTING
+          i_sender = gr_sender.
+
+
+      "Email TO...
+      LOOP AT s_email.
+        gr_recipient = cl_cam_address_bcs=>create_internet_address( s_email-low ).
+        "Add recipient to send request
+        CALL METHOD gr_send_request->add_recipient
+          EXPORTING
+            i_recipient = gr_recipient
+            i_express   = 'X'.
+
+        gr_send_request->set_send_immediately('X').
+      ENDLOOP.
+
+      WRITE sy-datum TO lv_date USING EDIT MASK '__-__-____'.
+      WRITE sy-uzeit TO lv_time USING EDIT MASK '__:__:__'.
+      CONCATENATE 'Contract renewals processed on'(010)
+              lv_date ' at '(011) lv_time ' :'
+              gc_crlf gc_crlf
+              INTO lv_string SEPARATED BY space.
+
+      CONCATENATE 'Contract No'(012)        gc_tab
+                  'Sold-to-party'(048)      gc_tab
+                  'Ship-to-party'(014)      gc_tab
+                  'Payer-party'(015)        gc_tab
+*                  'Action Date'(016)   GC_TAB     "commented by Vykunt on 7/1/2020 as field not used anymore
+                  'Contract Date'(017)  gc_tab
+*                  'New Action Date'(018)   GC_TAB  "commented by Vykunt on 7/1/2020 field not used anymore
+                  'New Contract Date'(019)  gc_tab
+                  'Status'(020)             gc_tab
+                  gc_crlf
+            INTO lv_string SEPARATED BY space.
+      LOOP AT lt_output INTO ls_output.
+        CONCATENATE lv_string
+                    ls_output-vbeln gc_tab
+         ls_output-kunnr   gc_tab
+         ls_output-kunnr_sp gc_tab
+         ls_output-kunnr_py gc_tab
+*         LS_OUTPUT-VASDA_I GC_TAB                   "commented by Vykunt on 7/1/2020 as field not used anymore
+         ls_output-venddat_i gc_tab
+*         LS_OUTPUT-VASDA GC_TAB                    "commented by Vykunt on 7/1/2020 as field not used anymore
+         ls_output-venddat gc_tab
+         ls_output-status gc_tab
+         gc_crlf
+         INTO lv_string.
+
+      ENDLOOP.
+      TRY.
+          cl_bcs_convert=>string_to_solix(
+            EXPORTING
+              iv_string   = lv_string
+              iv_codepage = '4103'  "suitable for MS Excel, leave empty
+              iv_add_bom  = 'X'     "for other doc types
+            IMPORTING
+              et_solix  = lv_binary
+              ev_size   = size ).
+        CATCH cx_bcs.
+          MESSAGE e445(so).
+      ENDTRY.
+
+      APPEND 'ASAB Contract Renewals Processing Log - see attached'(027)   TO lt_heading.
+      lv_title = 'ASAB Contract Renewals Processing Log'(040).
+      CONCATENATE lv_title lv_date  INTO lv_title SEPARATED BY space.
+
+      gr_document = cl_document_bcs=>create_document(
+         i_type    = 'RAW'
+         i_text    = lt_heading
+         i_subject = lv_title ).
+*     add the spread sheet as attachment to document object
+      gr_document->add_attachment(
+        i_attachment_type    = 'xls'
+        i_attachment_subject = lv_title
+        i_attachment_size    = size
+        i_att_content_hex    = lv_binary ).
+      "Add document to send request
+      CALL METHOD gr_send_request->set_document( gr_document ).
+
+      "Send email
+      IF p_send IS NOT INITIAL.
+        CALL METHOD gr_send_request->send(
+          EXPORTING
+            i_with_error_screen = 'X'
+          RECEIVING
+            result              = gv_sent_to_all ).
+
+        "Commit to send email
+        COMMIT WORK.
+      ENDIF.
+      "Exception handling
+    CATCH cx_bcs INTO gr_bcs_exception.
+      WRITE:
+        'Error!'(031),
+        'Error type:'(032),
+        gr_bcs_exception->error_type.
+  ENDTRY.
+* ALV List
+  TRY.
+      cl_salv_table=>factory( IMPORTING r_salv_table = gr_table CHANGING t_table = lt_output  ).
+    CATCH cx_salv_msg.
+  ENDTRY .
+  IF gr_table IS INITIAL .
+    MESSAGE 'Nothing to display'(033) TYPE 'I' DISPLAY LIKE 'E'.
+    EXIT .
+  ENDIF .
+*'Contract No'(012)        GC_TAB
+*                  'Sold-to-party'(013)      GC_TAB
+*                  'Ship-to-party'(014)      GC_TAB
+*                  'Payer-party'(015)        GC_TAB
+*                  'Action date'(016)        GC_TAB
+*                  'Contract enddate'(017)   GC_TAB
+*                  'Status'(018)
+
+  TRY.
+      gr_columns = gr_table->get_columns( ).
+      gr_columns->set_optimize( abap_true ).
+      gr_column ?= gr_columns->get_column( 'VBELN' ).
+      gr_column->set_long_text('Contract No'(T01) ).
+      gr_column->set_short_text('' ).
+      gr_column->set_medium_text( '' ).
+    CATCH cx_salv_not_found.
+  ENDTRY .
+  TRY.
+      gr_columns = gr_table->get_columns( ).
+      gr_columns->set_optimize( abap_true ).
+      gr_column ?= gr_columns->get_column( 'KUNNR' ).
+      gr_column->set_long_text('Sold-to-party'(T04) ).
+      gr_column->set_short_text( '' ).
+      gr_column->set_medium_text('' ).
+    CATCH cx_salv_not_found.
+  ENDTRY .
+  TRY.
+      gr_columns = gr_table->get_columns( ).
+      gr_columns->set_optimize( abap_true ).
+      gr_column ?= gr_columns->get_column( 'KUNNR_SP' ).
+      gr_column->set_long_text('Ship-to-party'(T07) ).
+      gr_column->set_short_text( '' ).
+      gr_column->set_medium_text('' ).
+    CATCH cx_salv_not_found.
+  ENDTRY .
+  TRY.
+      gr_columns = gr_table->get_columns( ).
+      gr_columns->set_optimize( abap_true ).
+      gr_column ?= gr_columns->get_column( 'KUNNR_PY' ).
+      gr_column->set_long_text('Payer-party'(T08) ).
+      gr_column->set_short_text( '' ).
+      gr_column->set_medium_text('' ).
+    CATCH cx_salv_not_found.
+  ENDTRY .
+  TRY.
+      gr_columns = gr_table->get_columns( ).
+      gr_columns->set_optimize( abap_true ).
+      gr_column ?= gr_columns->get_column( 'VENDDAT_I' ).
+      gr_column->set_long_text('Contract date'(T09) ).
+      gr_column->set_short_text( '' ).
+      gr_column->set_medium_text('' ).
+    CATCH cx_salv_not_found.
+  ENDTRY .
+  TRY.
+      gr_columns = gr_table->get_columns( ).
+      gr_columns->set_optimize( abap_true ).
+      gr_column ?= gr_columns->get_column( 'VASDA_I' ).
+      gr_column->set_long_text('Action date'(T10) ).
+      gr_column->set_short_text( '' ).
+      gr_column->set_medium_text('' ).
+    CATCH cx_salv_not_found.
+  ENDTRY .
+  TRY.
+      gr_columns = gr_table->get_columns( ).
+      gr_columns->set_optimize( abap_true ).
+      gr_column ?= gr_columns->get_column( 'VENDDAT' ).
+      gr_column->set_long_text('New Contract date'(T09) ).
+      gr_column->set_short_text( '' ).
+      gr_column->set_medium_text('' ).
+    CATCH cx_salv_not_found.
+  ENDTRY .
+  TRY.
+      gr_columns = gr_table->get_columns( ).
+      gr_columns->set_optimize( abap_true ).
+      gr_column ?= gr_columns->get_column( 'VASDA' ).
+      gr_column->set_long_text('New Action date'(T10) ).
+      gr_column->set_short_text( '' ).
+      gr_column->set_medium_text('' ).
+    CATCH cx_salv_not_found.
+  ENDTRY .
+  TRY.
+      gr_columns = gr_table->get_columns( ).
+      gr_columns->set_optimize( abap_true ).
+      gr_column ?= gr_columns->get_column( 'STATUS' ).
+      gr_column->set_long_text('Status'(T11) ).
+      gr_column->set_short_text( '' ).
+      gr_column->set_medium_text('' ).
+    CATCH cx_salv_not_found.
+  ENDTRY .
+
+ENDFORM.
+FORM  pf_status_set USING rt_extab TYPE slis_t_extab..
+
+  SET PF-STATUS 'ZSTANDARD'.
+
+ENDFORM.
+FORM user_command USING okcode LIKE sy-ucomm
+                          wa_selfield TYPE slis_selfield.
+  CASE okcode.
+    WHEN 'SPOS' OR 'ONLI' OR 'EXE'.
+      IF mytab-dynnr = 100.
+        PERFORM save_data.
+        IF p_send IS NOT INITIAL AND lt_output IS NOT INITIAL.
+          PERFORM send_email.
+        ENDIF.
+        PERFORM display_data.
+      ELSE.
+        PERFORM save_data_m USING v_flag.
+        IF p_send_m IS NOT INITIAL AND v_flag IS NOT INITIAL AND
+          p_update IS  INITIAL.
+          PERFORM send_email_m.
+          CLEAR v_flag.
+        ENDIF.
+        PERFORM display_data_m.
+
+      ENDIF.
+    WHEN 'E' OR 'ECAN'..
+      LEAVE TO SCREEN 0.
+    WHEN 'ENDE'.
+      LEAVE PROGRAM.
+  ENDCASE.
+ENDFORM.
+*&---------------------------------------------------------------------*
+*&      Form  SAVE_DATA
+*&---------------------------------------------------------------------*
+*       text
+*----------------------------------------------------------------------*
+*  -->  p1        text
+*  <--  p2        text
+*----------------------------------------------------------------------*
+FORM save_data .
+  CLEAR v_tabix.
+
+  LOOP AT lt_output INTO ls_output WHERE checkbox = abap_true AND status IS INITIAL..
+    IF sy-subrc = 0.
+      READ TABLE it_data INTO ls_data WITH KEY vbeln = ls_output-vbeln.
+      IF sy-subrc = 0.
+
+        ls_data-venddat = ls_output-venddat.
+        ls_data-vasda = ls_output-vasda.
+        ls_data-zzboxes = ls_output-zzboxes .
+        PERFORM update_ren USING ls_data."LS_DATA-VENDDAT LS_DATA-VASDR LS_DATA-VASDA
+*                                   LS_DATA-VBELN LS_DATA-ZZBOXES .
+        MODIFY lt_output FROM ls_output TRANSPORTING status .
+        CLEAR ls_output.
+      ENDIF.
+
+    ENDIF.
+  ENDLOOP.
+
+
+ENDFORM.
+*&---------------------------------------------------------------------*
+*&      Form  APPEDING_OUTPUT
+*&---------------------------------------------------------------------*
+*       text
+*----------------------------------------------------------------------*
+*  -->  p1        text
+*  <--  p2        text
+*----------------------------------------------------------------------*
+FORM appending_output .
+  ls_output-vbeln =  ls_data-vbeln.
+  ls_output-vasda  =  ls_data-vasda .
+  ls_output-venddat  =  ls_data-venddat ."WA_BAPICTR-CON_EN_DAT .
+  ls_output-zzboxes = ls_data-zzboxes.
+  READ TABLE lt_vbpa_1 INTO ls_vbpa WITH KEY vbeln = ls_data-vbeln.
+  IF sy-subrc = 0.
+    ls_output-kunnr  =  ls_vbpa-kunnr.
+  ENDIF.
+  READ TABLE lt_vbpa_2 INTO ls_vbpa WITH KEY vbeln = ls_data-vbeln.
+  IF sy-subrc = 0.
+    ls_output-kunnr_py  =  ls_vbpa-kunnr.
+  ENDIF.
+  READ TABLE lt_vbpa_3 INTO ls_vbpa WITH KEY vbeln = ls_data-vbeln.
+  IF sy-subrc = 0.
+    ls_output-kunnr_sp  =  ls_vbpa-kunnr.
+  ENDIF.
+
+  APPEND ls_output TO lt_output.
+
+  CLEAR ls_data.
+  CLEAR ls_output.
+
+ENDFORM.
+*&---------------------------------------------------------------------*
+*&      Form  SAVE_TEXT
+*&---------------------------------------------------------------------*
+*       text
+*----------------------------------------------------------------------*
+*      -->P_V_COUNT  text
+*----------------------------------------------------------------------*
+FORM save_text." USING ls_data.
+
+
+  PERFORM date_time_user.
+  IF ls_data-vaktsch = 'ZEVG'.
+    CONCATENATE  'Ever Green Contract is renewed' ' from autorenewal process'  INTO wa_tlines-tdline ."RESPECTING BLANKS.
+  ELSE.
+    CONCATENATE  'Contract is renewed/extended' ' from autorenewal process'  INTO wa_tlines-tdline." RESPECTING BLANKS.
+  ENDIF.
+  wa_tlines-tdformat = '*'.
+*   IT_TLINES-TDLINE = IT_TEXT-LINE.
+  APPEND wa_tlines TO it_tlines.
+  CLEAR  wa_tlines.
+
+  MOVE '------------------------------------------------------------------------------' TO wa_tlines-tdline.
+  wa_tlines-tdformat = '*'.
+*   IT_TLINES-TDLINE = IT_TEXT-LINE.
+  APPEND wa_tlines TO it_tlines.
+  CLEAR  wa_tlines.
+*(By: NAME2 | On: 08/01/2018 At 15:55:05)
+*Rejection Reason:
+*Comments:
+
+  x_header-tdobject = 'VBBK'.
+  x_header-tdname   = ls_data-vbeln .
+  x_header-tdid     = 'ZAS4'.
+  x_header-tdspras  = 'E'.
+
+  CALL FUNCTION 'READ_TEXT'
+    EXPORTING
+*     CLIENT                  = SY-MANDT
+      id                      = x_header-tdid
+      language                = 'E'
+      name                    = x_header-tdname
+      object                  = 'VBBK'
+*     ARCHIVE_HANDLE          = 0
+*     LOCAL_CAT               = ' '
+*   IMPORTING
+*     HEADER                  =
+*     OLD_LINE_COUNTER        =
+    TABLES
+      lines                   = it_tlines_1
+    EXCEPTIONS
+      id                      = 1
+      language                = 2
+      name                    = 3
+      not_found               = 4
+      object                  = 5
+      reference_check         = 6
+      wrong_access_to_archive = 7
+      OTHERS                  = 8.
+  IF sy-subrc <> 0.
+* Implement suitable error handling here
+  ENDIF.
+
+  IF it_tlines_1[] IS NOT INITIAL.
+    APPEND LINES OF it_tlines_1[] TO it_tlines[].
+
+  ENDIF.
+
+  CALL FUNCTION 'SAVE_TEXT'
+    EXPORTING
+*     CLIENT          = SY-MANDT
+      header          = x_header
+      insert          = ' '
+      savemode_direct = 'X'
+*     OWNER_SPECIFIED = ' '
+*     LOCAL_CAT       = ' '
+*   IMPORTING
+*     FUNCTION        =
+*     NEWHEADER       = X_HEADER
+    TABLES
+      lines           = it_tlines
+    EXCEPTIONS
+      id              = 1
+      language        = 2
+      name            = 3
+      object          = 4
+      OTHERS          = 5.
+  IF sy-subrc <> 0.
+* Implement suitable error handling here
+  ELSE.
+    COMMIT WORK.
+
+  ENDIF.
+
+  CLEAR wa_tlines.
+  REFRESH: it_tlines[],it_tlines_1[].
+ENDFORM.
+*&---------------------------------------------------------------------*
+*&      Form  DATE_TIME_USER
+*&---------------------------------------------------------------------*
+*       text
+*----------------------------------------------------------------------*
+*  -->  p1        text
+*  <--  p2        text
+*----------------------------------------------------------------------*
+FORM date_time_user .
+  CONCATENATE '(By: ' sy-uname '| On:' sy-datum+4(2)'/' sy-datum+6(2)'/' sy-datum+0(4) ' At '  sy-uzeit+0(2) ':'
+                                    sy-uzeit+2(2) ':' sy-uzeit+4(2) ')' INTO wa_tlines-tdline RESPECTING BLANKS.
+  wa_tlines-tdformat = '*'.
+*    IT_TLINES-TDLINE = IT_TEXT-LINE.
+  APPEND wa_tlines TO it_tlines.
+  CLEAR  wa_tlines.
+
+
+ENDFORM.
+*&---------------------------------------------------------------------*
+*&      Form  UPDATE_RUN1
+*&---------------------------------------------------------------------*
+*       text
+*----------------------------------------------------------------------*
+*      -->P_LS_DATA  text
+*----------------------------------------------------------------------*
+FORM update_run1  USING    ls_data TYPE ty_input.
+  wa_bapictr-con_en_dat = ls_data-venddat .
+  wa_bapictr-act_datrul = ls_data-vasdr.
+  wa_bapictr-action_dat = ls_data-vasda.
+
+  wa_bapictrx-updateflag = abap_true.
+  wa_bapictrx-con_en_dat = abap_true.
+  wa_bapictrx-action_dat = abap_true.
+  wa_bapictrx-act_datrul = abap_true.
+
+  ls_bape_vbak-vbeln          = ls_data-vbeln.
+  CONDENSE ls_data-zzboxes.
+  ls_bape_vbak-zzboxes =  ls_data-zzboxes.
+  PERFORM map_extension USING 'BAPE_VBAK' 'LS_BAPE_VBAK'.      "BAPI structure for additional fields
+
+  ls_bape_vbakx-vbeln          = ls_data-vbeln.
+  ls_bape_vbakx-zzboxes  = abap_true.
+  ls_extensionex-structure  = 'BAPE_VBAKX'.
+  PERFORM map_extension USING 'BAPE_VBAKX' 'LS_BAPE_VBAKX'.        "BAPI structure for additional fields
+
+  APPEND wa_bapictr TO it_bapictr.
+  CLEAR wa_bapictr.
+
+  APPEND wa_bapictrx TO it_bapictrx.
+  CLEAR wa_bapictrx.
+ENDFORM.
+*&---------------------------------------------------------------------*
+*&      Form  PROCESS_RULES
+*&---------------------------------------------------------------------*
+*       text
+*----------------------------------------------------------------------*
+*  -->  p1        text
+*  <--  p2        text
+*----------------------------------------------------------------------*
+FORM process_rules .
+  IF ls_data-vaktsch = 'Z001'.
+    ls_boxes = ls_data-zzboxes.
+    IF ls_boxes > 1.
+
+      IF ls_data-vasdr = 'S1'.            "Rule for contract end date
+        PERFORM date_counter USING '01' CHANGING ls_data-vasda.       "01 - 1 month
+        PERFORM date_counter USING '01' CHANGING ls_data-venddat.
+
+        ls_boxes = ls_boxes - 1.
+        ls_data-zzboxes = ls_boxes.
+
+        PERFORM update_ren USING ls_data."LS_DATA-VENDDAT LS_DATA-VASDR LS_DATA-VASDA
+*                                   LS_DATA-VBELN LS_DATA-ZZBOXES .
+      ELSEIF ls_data-vasdr = 'S2'.            "Rule for contract end date
+        PERFORM date_counter USING '02' CHANGING ls_data-vasda.
+        PERFORM date_counter USING '02' CHANGING ls_data-venddat.
+
+        ls_boxes = ls_boxes - 1.
+        ls_data-zzboxes = ls_boxes.
+
+        PERFORM update_ren USING ls_data."LS_DATA-VENDDAT LS_DATA-VASDR LS_DATA-VASDA
+*                                   LS_DATA-VBELN LS_DATA-ZZBOXES .
+      ELSEIF ls_data-vasdr = 'S3'.            "Rule for contract end date
+        PERFORM date_counter USING '03' CHANGING ls_data-vasda.
+        PERFORM date_counter USING '03' CHANGING ls_data-venddat.
+
+        ls_boxes = ls_boxes - 1.
+        ls_data-zzboxes = ls_boxes.
+
+        PERFORM update_ren USING ls_data."LS_DATA-VENDDAT LS_DATA-VASDR LS_DATA-VASDA
+*                                   LS_DATA-VBELN LS_DATA-ZZBOXES .
+      ELSEIF ls_data-vasdr = 'S4'.          "Rule for contract end date
+        PERFORM date_counter USING '06' CHANGING ls_data-vasda.
+        PERFORM date_counter USING '06' CHANGING ls_data-venddat.
+
+        ls_boxes = ls_boxes - 1.
+        ls_data-zzboxes = ls_boxes.
+
+        PERFORM update_ren USING ls_data."LS_DATA-VENDDAT LS_DATA-VASDR LS_DATA-VASDA
+*                                   LS_DATA-VBELN LS_DATA-ZZBOXES .
+      ELSEIF ls_data-vasdr = 'S5'.
+        PERFORM date_counter USING '12' CHANGING ls_data-vasda.
+        PERFORM date_counter USING '12' CHANGING ls_data-venddat.
+
+        ls_boxes = ls_boxes - 1.
+        ls_data-zzboxes = ls_boxes.
+
+        PERFORM update_ren USING ls_data."LS_DATA-VENDDAT LS_DATA-VASDR LS_DATA-VASDA
+*                                   LS_DATA-VBELN LS_DATA-ZZBOXES .
+      ELSEIF ls_data-vasdr = 'S6'.
+        PERFORM date_counter USING '24' CHANGING ls_data-vasda.
+        PERFORM date_counter USING '24' CHANGING ls_data-venddat.
+
+        ls_boxes = ls_boxes - 1.
+        ls_data-zzboxes = ls_boxes.
+
+        PERFORM update_ren USING ls_data."LS_DATA-VENDDAT LS_DATA-VASDR LS_DATA-VASDA
+*                                   LS_DATA-VBELN LS_DATA-ZZBOXES .
+      ELSEIF ls_data-vasdr = 'S7'.         "Rule for contract end date
+        PERFORM date_counter USING '60' CHANGING ls_data-vasda.
+        PERFORM date_counter USING '60' CHANGING ls_data-venddat.
+
+        ls_boxes = ls_boxes - 1.
+        ls_data-zzboxes = ls_boxes.
+
+        PERFORM update_ren USING ls_data."LS_DATA-VENDDAT LS_DATA-VASDR LS_DATA-VASDA
+*                                   LS_DATA-VBELN LS_DATA-ZZBOXES .
+      ELSE.
+        CLEAR : ls_data-vasda,ls_data-venddat.
+        ls_output-status  = text-007 ."'Please check the action date procedure is Z001(renewal) and action date rule'.
+        CONCATENATE ls_output-status ls_data-vasdr INTO ls_output-status SEPARATED BY space.     "value" + description
+*              LS_DATA-FLAG = ABAP_TRUE.
+      ENDIF.
+
+
+    ELSEIF ls_boxes = 1.
+
+
+      IF ls_data-vasdr = 'S1'.
+        CLEAR ls_data-vasda.
+        PERFORM date_counter USING '01' CHANGING ls_data-venddat.
+
+        ls_boxes = ls_boxes - 1.
+        ls_data-zzboxes = ls_boxes.
+        PERFORM update_ren USING ls_data."LS_DATA-VENDDAT LS_DATA-VASDR LS_DATA-VASDA
+*                                   LS_DATA-VBELN LS_DATA-ZZBOXES .
+      ELSEIF ls_data-vasdr = 'S2'.
+        CLEAR ls_data-vasda.
+        PERFORM date_counter USING '02' CHANGING ls_data-venddat.
+
+        ls_boxes = ls_boxes - 1.
+        ls_data-zzboxes = ls_boxes.
+        PERFORM update_ren USING ls_data."LS_DATA-VENDDAT LS_DATA-VASDR LS_DATA-VASDA
+*                                   LS_DATA-VBELN LS_DATA-ZZBOXES .
+      ELSEIF ls_data-vasdr = 'S3'.
+        CLEAR ls_data-vasda.
+        PERFORM date_counter USING '03' CHANGING ls_data-venddat.
+
+        ls_boxes = ls_boxes - 1.
+        ls_data-zzboxes = ls_boxes.
+        PERFORM update_ren USING ls_data."LS_DATA-VENDDAT LS_DATA-VASDR LS_DATA-VASDA
+*                                   LS_DATA-VBELN LS_DATA-ZZBOXES .
+      ELSEIF ls_data-vasdr = 'S4'.
+        CLEAR ls_data-vasda.
+        PERFORM date_counter USING '06' CHANGING ls_data-venddat.
+
+        ls_boxes = ls_boxes - 1.
+        ls_data-zzboxes = ls_boxes.
+        PERFORM update_ren USING ls_data."LS_DATA-VENDDAT LS_DATA-VASDR LS_DATA-VASDA
+*                                   LS_DATA-VBELN LS_DATA-ZZBOXES .
+      ELSEIF ls_data-vasdr = 'S5'.
+        CLEAR ls_data-vasda.
+        PERFORM date_counter USING '12' CHANGING ls_data-venddat.
+
+        ls_boxes = ls_boxes - 1.
+        ls_data-zzboxes = ls_boxes.
+        PERFORM update_ren USING ls_data."LS_DATA-VENDDAT LS_DATA-VASDR LS_DATA-VASDA
+*                                   LS_DATA-VBELN LS_DATA-ZZBOXES .
+      ELSEIF ls_data-vasdr = 'S6'.
+        CLEAR ls_data-vasda.
+        PERFORM date_counter USING '24' CHANGING ls_data-venddat.
+
+        ls_boxes = ls_boxes - 1.
+        ls_data-zzboxes = ls_boxes.
+        PERFORM update_ren USING ls_data."LS_DATA-VENDDAT LS_DATA-VASDR LS_DATA-VASDA
+*                                   LS_DATA-VBELN LS_DATA-ZZBOXES .
+      ELSEIF ls_data-vasdr = 'S7'.
+        CLEAR ls_data-vasda.
+        PERFORM date_counter USING '60' CHANGING ls_data-venddat.
+
+        ls_boxes = ls_boxes - 1.
+        ls_data-zzboxes = ls_boxes.
+        PERFORM update_ren USING ls_data."LS_DATA-VENDDAT LS_DATA-VASDR LS_DATA-VASDA
+*                                   LS_DATA-VBELN LS_DATA-ZZBOXES .
+      ELSE.
+        CLEAR : ls_data-vasda,ls_data-venddat.
+        ls_output-status  = text-001."'Please check the action date procedure is Z001(renewal) but action date rule is'.
+        CONCATENATE ls_output-status ls_data-vasdr INTO ls_output-status SEPARATED BY space.     "value" + description
+*              LS_DATA-FLAG = ABAP_TRUE.
+      ENDIF.
+
+    ELSE.
+      CLEAR : ls_data-vasda,ls_data-venddat.
+      CONCATENATE text-002 ls_data-vasdr text-003
+      INTO ls_output-status SEPARATED BY space.
+*            LS_DATA-FLAG = ABAP_TRUE.
+    ENDIF.
+  ELSE.
+    CLEAR : ls_data-vasda,ls_data-venddat.
+    ls_output-status = text-004 .
+*          LS_DATA-FLAG = ABAP_TRUE.
+  ENDIF.
+
+ENDFORM.
+*&---------------------------------------------------------------------*
+*&      Form  GET_DATA_MASTER
+*&---------------------------------------------------------------------*
+*       text
+*----------------------------------------------------------------------*
+*  -->  p1        text
+*  <--  p2        text
+*----------------------------------------------------------------------*
+FORM get_data_master .
+  SELECT vbeln vbegdat venddat vendreg INTO TABLE it_veda_m FROM veda
+                               WHERE vbeln IN t_vbeln AND vendreg IN t_vendreg
+                                     AND   vposn EQ space
+                                   AND vbegdat IN t_begdat AND
+                                       vkuesch EQ space. "GE sy-datum.  "commented as logic changed on 4/24/2020
+  IF sy-subrc = 0.
+    IF it_veda_m IS NOT INITIAL.
+      SELECT   a~vbelv a~vbeln c~venddat
+                                 FROM vbak AS b
+                                 INNER JOIN vbfa AS a ON b~vbeln EQ a~vbelv
+                                 INNER JOIN veda AS c ON c~vbeln EQ a~vbeln
+                                 INTO CORRESPONDING FIELDS OF TABLE it_data_m
+                                 FOR ALL ENTRIES IN it_veda_m WHERE a~vbelv = it_veda_m-vbeln AND b~auart IN t_auart
+                                     AND a~posnv EQ space AND c~vposn EQ space
+                                .
+
+      IF sy-subrc = 0.
+        SORT it_data_m   BY vbelv ASCENDING venddat DESCENDING.
+        DELETE ADJACENT DUPLICATES FROM it_data_m COMPARING vbelv.
+
+      ENDIF.
+    ENDIF.
+  ENDIF.
+ENDFORM.
+*&---------------------------------------------------------------------*
+*&      Form  PROCESS_DATA_M
+*&---------------------------------------------------------------------*
+*       text
+*----------------------------------------------------------------------*
+*  -->  p1        text
+*  <--  p2        text
+*----------------------------------------------------------------------*
+FORM process_data_m .
+  LOOP AT it_data_m INTO ls_data_m.
+
+    v_flag = abap_true.
+
+    ls_output_m-vbelv  =  ls_data_m-vbelv .
+    ls_output_m-venddat  =  ls_data_m-venddat .
+    ls_output_m-vbeln  =  ls_data_m-vbeln.
+    READ TABLE it_veda_m INTO ls_veda_m WITH KEY vbeln = ls_data_m-vbelv.
+    IF sy-subrc = 0.
+
+      ls_output_m-vendreg  =  ls_veda_m-vendreg.
+    ENDIF.
+* Begin of changes by Vykunt on 7/1/2020 for SCTASK0410919  / SCTASK0411379 / SCTASK0410120
+    "Master agreement ST end date is greater or matches should ignore for processing
+    IF ls_data_m-venddat <= ls_veda_m-venddat.
+      CONTINUE.
+    ELSE.
+
+      PERFORM update_ren_m USING ls_data_m.
+
+      PERFORM appending_output_m.
+    ENDIF.
+
+  ENDLOOP.
+ENDFORM.
+
+*&---------------------------------------------------------------------*
+*&      Form  UPDATE_REN_M
+*&---------------------------------------------------------------------*
+*       text
+*----------------------------------------------------------------------*
+*      -->P_LS_DATA_M  text
+*----------------------------------------------------------------------*
+FORM update_ren_m  USING  ls_data_m TYPE ty_input_m.
+  IF p_update IS INITIAL.
+    wa_bapictr-con_en_dat = ls_data_m-venddat .
+
+    wa_bapictrx-updateflag = abap_true.
+    wa_bapictrx-con_en_dat = abap_true.
+
+    APPEND wa_bapictr TO it_bapictr.
+    CLEAR wa_bapictr.
+
+    APPEND wa_bapictrx TO it_bapictrx.
+    CLEAR wa_bapictrx.
+
+    order_header_inx-updateflag = 'U'.
+    CALL FUNCTION 'BAPI_CUSTOMERCONTRACT_CHANGE'
+      EXPORTING
+        salesdocument       = ls_data_m-vbelv
+        contract_header_in  = order_header_in
+        contract_header_inx = order_header_inx
+*       SIMULATION          =
+*       BEHAVE_WHEN_ERROR   = ' '
+*       INT_NUMBER_ASSIGNMENT       = ' '
+*       LOGIC_SWITCH        =
+*       NO_STATUS_BUF_INIT  = ' '
+      TABLES
+        return              = it_bapiret2
+*       CONTRACT_ITEM_IN    =
+*       CONTRACT_ITEM_INX   =
+*       PARTNERS            =
+*       PARTNERCHANGES      =
+*       PARTNERADDRESSES    =
+*       CONDITIONS_IN       =
+*       CONDITIONS_INX      =
+*       CONTRACT_CFGS_REF   =
+*       CONTRACT_CFGS_INST  =
+*       CONTRACT_CFGS_PART_OF       =
+*       CONTRACT_CFGS_VALUE =
+*       CONTRACT_CFGS_BLOB  =
+*       CONTRACT_CFGS_VK    =
+*       CONTRACT_CFGS_REFINST       =
+*       CONTRACT_TEXT       =
+        contract_data_in    = it_bapictr
+        contract_data_inx   = it_bapictrx
+*       CONTRACT_KEYS       =
+*       EXTENSIONIN         =
+*       EXTENSIONEX         =
+      .
+
+    READ TABLE it_bapiret2 INTO ls_bapiret2 WITH KEY type = 'E'.
+    IF sy-subrc = 0.
+      LOOP AT it_bapiret2 INTO ls_bapiret2 .
+        CONCATENATE ls_bapiret2-message ls_output_m-status INTO ls_output_m-status SEPARATED BY space.
+      ENDLOOP.
+      CLEAR ls_bapiret2.
+*        CLEAR LS_DATA-VENDDAT.
+    ELSE.
+*
+      CALL FUNCTION 'BAPI_TRANSACTION_COMMIT'
+        EXPORTING
+          wait   = 'X'
+        IMPORTING
+          return = it_return.
+*        WAIT UP TO 10 SECONDS.
+
+
+      ls_output_m-status  =  text-005 .
+
+    ENDIF.
+  ENDIF.
+  REFRESH: it_bapictrx,it_bapictr.
+ENDFORM.
+*&---------------------------------------------------------------------*
+*&      Form  APPEDING_OUTPUT
+*&---------------------------------------------------------------------*
+*       text
+*----------------------------------------------------------------------*
+*  -->  p1        text
+*  <--  p2        text
+*----------------------------------------------------------------------*
+FORM appending_output_m .
+
+  APPEND ls_output_m TO lt_output_m.
+
+  CLEAR ls_data_m.
+  CLEAR ls_output_m.
+
+ENDFORM.
+*&---------------------------------------------------------------------*
+*&      Form  DISPLAY_DATA_M
+*&---------------------------------------------------------------------*
+*       text
+*----------------------------------------------------------------------*
+*  -->  p1        text
+*  <--  p2        text
+*----------------------------------------------------------------------*
+FORM display_data_m .
+  CLEAR p_update.
+  REFRESH: lt_fcat[].
+
+  ls_fcat-fieldname = 'VBELV'.
+  ls_fcat-tabname = 'LT_OUTPUT_M'.
+  ls_fcat-row_pos = '1'.
+  ls_fcat-col_pos = '1'.
+  ls_fcat-seltext_l = 'Contract No'.
+  APPEND ls_fcat TO lt_fcat.
+  CLEAR ls_fcat.
+
+  ls_fcat-fieldname = 'VENDDAT'.
+  ls_fcat-tabname = 'LT_OUTPUT_M'.
+  ls_fcat-row_pos = '1'.
+  ls_fcat-col_pos = '2'.
+  ls_fcat-seltext_l = 'New Contract enddate'.
+  APPEND ls_fcat TO lt_fcat.
+  CLEAR ls_fcat.
+
+  ls_fcat-fieldname = 'VENDREG'.
+  ls_fcat-tabname = 'LT_OUTPUT_M'.
+  ls_fcat-row_pos = '1'.
+  ls_fcat-col_pos = '3'.
+  ls_fcat-seltext_l = 'Contract enddate rule'.
+  APPEND ls_fcat TO lt_fcat.
+  CLEAR ls_fcat.
+
+  ls_fcat-fieldname = 'VBELN'.
+  ls_fcat-tabname = 'LT_OUTPUT_M'.
+  ls_fcat-row_pos = '1'.
+  ls_fcat-col_pos = '4'.
+  ls_fcat-seltext_l = 'Work order'.
+  APPEND ls_fcat TO lt_fcat.
+  CLEAR ls_fcat.
+
+  ls_fcat-fieldname = 'STATUS'.
+  ls_fcat-tabname = 'LT_OUTPUT_M'.
+  ls_fcat-row_pos = '1'.
+  ls_fcat-col_pos = '5'.
+  ls_fcat-seltext_l = 'Status'.
+  APPEND ls_fcat TO lt_fcat.
+  CLEAR ls_fcat.
+
+  ls_layout-colwidth_optimize = abap_true.
+  ls_layout-zebra = abap_true.
+  ls_layout-box_fieldname = 'CHECKBOX'.
+  ls_layout-box_tabname = 'LT_OUTPUT_M'.
+
+  CALL FUNCTION 'REUSE_ALV_GRID_DISPLAY'
+    EXPORTING
+      i_callback_program       = sy-repid
+      i_callback_pf_status_set = 'PF_STATUS_SET'
+      i_callback_user_command  = 'USER_COMMAND'    " For Hotspot
+      is_layout                = ls_layout
+      it_fieldcat              = lt_fcat
+    TABLES
+      t_outtab                 = lt_output_m
+    EXCEPTIONS
+      program_error            = 1
+      OTHERS                   = 2.
+  IF sy-subrc <> 0.
+* Implement suitable error handling here
+  ENDIF.
+*  ENDIF.
+ENDFORM.
+*&---------------------------------------------------------------------*
+*&      Form  SAVE_DATA_M
+*&---------------------------------------------------------------------*
+*       text
+*----------------------------------------------------------------------*
+*  -->  p1        text
+*  <--  p2        text
+*----------------------------------------------------------------------*
+FORM save_data_m  USING v_flag .
+  CLEAR v_tabix.
+
+  LOOP AT lt_output_m INTO ls_output_m WHERE checkbox = abap_true AND status IS INITIAL..
+    IF sy-subrc = 0.
+      v_flag = abap_true.
+      READ TABLE it_data_m INTO ls_data_m WITH KEY vbelv = ls_output_m-vbelv.
+      IF sy-subrc = 0.
+
+        ls_output_m-vbelv  =  ls_data_m-vbelv .
+        ls_output_m-venddat  =  ls_data_m-venddat .
+        ls_output_m-vbeln  =  ls_data_m-vbeln.
+
+        READ TABLE it_veda_m INTO ls_veda_m WITH KEY vbeln = ls_data_m-vbelv.
+        IF sy-subrc = 0.
+          ls_output_m-vendreg  =  ls_veda_m-vendreg.
+        ENDIF.
+
+        PERFORM update_ren_m USING ls_data_m.
+        MODIFY lt_output_m FROM ls_output_m TRANSPORTING status .
+        CLEAR ls_output_m.
+
+      ENDIF.
+
+    ENDIF.
+  ENDLOOP.
+
+
+ENDFORM.
+*&---------------------------------------------------------------------*
+*&      Form  SEND_EMAIL_M
+*&---------------------------------------------------------------------*
+*       text
+*----------------------------------------------------------------------*
+*  -->  p1        text
+*  <--  p2        text
+*----------------------------------------------------------------------*
+FORM send_email_m .
+  CLEAR: lv_string,lv_title.
+  REFRESH :lt_heading.
+  CHECK s_email[] IS NOT INITIAL.
+  TRY.
+      "Create send request
+      gr_send_request = cl_bcs=>create_persistent( ).
+
+
+      "Email FROM...
+*      lv_from = 'donotreply@sabre.com'.
+      gr_sender = cl_sapuser_bcs=>create( sy-uname ).
+
+      "Add sender to send request
+      CALL METHOD gr_send_request->set_sender
+        EXPORTING
+          i_sender = gr_sender.
+
+
+      "Email TO...
+      LOOP AT s_email.
+        gr_recipient = cl_cam_address_bcs=>create_internet_address( s_email-low ).
+        "Add recipient to send request
+        CALL METHOD gr_send_request->add_recipient
+          EXPORTING
+            i_recipient = gr_recipient
+            i_express   = 'X'.
+
+        gr_send_request->set_send_immediately('X').
+      ENDLOOP.
+
+      WRITE sy-datum TO lv_date USING EDIT MASK '__-__-____'.
+      WRITE sy-uzeit TO lv_time USING EDIT MASK '__:__:__'.
+      CONCATENATE 'Master agreements processed on'(010)
+              lv_date ' at '(011) lv_time ' :'
+              gc_crlf gc_crlf
+              INTO lv_string SEPARATED BY space.
+
+      CONCATENATE 'Contract No'(012)        gc_tab
+                  'New Contract endDate'(045)  gc_tab
+                  'Contract end date rule'(042)   gc_tab
+                  'Work order'(043)   gc_tab
+                  'Status'(044)       gc_tab
+                  gc_crlf
+            INTO lv_string SEPARATED BY space.
+      LOOP AT lt_output_m INTO ls_output_m.
+        CONCATENATE lv_string
+                    ls_output_m-vbelv gc_tab
+         ls_output_m-venddat   gc_tab
+         ls_output_m-vendreg gc_tab
+         ls_output_m-vbeln gc_tab
+         ls_output_m-status gc_tab
+
+         gc_crlf
+         INTO lv_string.
+
+      ENDLOOP.
+      TRY.
+          cl_bcs_convert=>string_to_solix(
+            EXPORTING
+              iv_string   = lv_string
+              iv_codepage = '4103'  "suitable for MS Excel, leave empty
+              iv_add_bom  = 'X'     "for other doc types
+            IMPORTING
+              et_solix  = lv_binary
+              ev_size   = size ).
+        CATCH cx_bcs.
+          MESSAGE e445(so).
+      ENDTRY.
+
+      APPEND 'ASAB Master agreements Processing Log - see attached'(045)   TO lt_heading.
+      lv_title = 'ASAB Master agreements Processing Log'(046).
+      CONCATENATE lv_title lv_date  INTO lv_title SEPARATED BY space.
+
+      gr_document = cl_document_bcs=>create_document(
+         i_type    = 'RAW'
+         i_text    = lt_heading
+         i_subject = lv_title ).
+*     add the spread sheet as attachment to document object
+      gr_document->add_attachment(
+        i_attachment_type    = 'xls'
+        i_attachment_subject = lv_title
+        i_attachment_size    = size
+        i_att_content_hex    = lv_binary ).
+      "Add document to send request
+      CALL METHOD gr_send_request->set_document( gr_document ).
+
+      "Send email
+      IF p_send_m IS NOT INITIAL.
+        CALL METHOD gr_send_request->send(
+          EXPORTING
+            i_with_error_screen = 'X'
+          RECEIVING
+            result              = gv_sent_to_all ).
+
+        "Commit to send email
+        COMMIT WORK.
+      ENDIF.
+      "Exception handling
+    CATCH cx_bcs INTO gr_bcs_exception.
+      WRITE:
+        'Error!'(031),
+        'Error type:'(032),
+        gr_bcs_exception->error_type.
+  ENDTRY.
+* ALV List
+  TRY.
+      cl_salv_table=>factory( IMPORTING r_salv_table = gr_table CHANGING t_table = lt_output_m  ).
+    CATCH cx_salv_msg.
+  ENDTRY .
+  IF gr_table IS INITIAL .
+    MESSAGE 'Nothing to display'(033) TYPE 'I' DISPLAY LIKE 'E'.
+    EXIT .
+  ENDIF .
+*'Contract No'(012)        GC_TAB
+*                  'Sold-to-party'(013)      GC_TAB
+*                  'Ship-to-party'(014)      GC_TAB
+*                  'Payer-party'(015)        GC_TAB
+*                  'Action date'(016)        GC_TAB
+*                  'Contract enddate'(017)   GC_TAB
+*                  'Status'(018)
+
+  TRY.
+      gr_columns = gr_table->get_columns( ).
+      gr_columns->set_optimize( abap_true ).
+      gr_column ?= gr_columns->get_column( 'VBELV' ).
+      gr_column->set_long_text('Contract No'(T01) ).
+      gr_column->set_short_text('' ).
+      gr_column->set_medium_text( '' ).
+    CATCH cx_salv_not_found.
+  ENDTRY .
+  TRY.
+      gr_columns = gr_table->get_columns( ).
+      gr_columns->set_optimize( abap_true ).
+      gr_column ?= gr_columns->get_column( 'VENDDAT' ).
+      gr_column->set_long_text('New Contract endDate'(T21) ).
+      gr_column->set_short_text( '' ).
+      gr_column->set_medium_text('' ).
+    CATCH cx_salv_not_found.
+  ENDTRY .
+  TRY.
+      gr_columns = gr_table->get_columns( ).
+      gr_columns->set_optimize( abap_true ).
+      gr_column ?= gr_columns->get_column( 'VENDREG' ).
+      gr_column->set_long_text('Contract end date rule'(T22) ).
+      gr_column->set_short_text( '' ).
+      gr_column->set_medium_text('' ).
+    CATCH cx_salv_not_found.
+  ENDTRY .
+  TRY.
+      gr_columns = gr_table->get_columns( ).
+      gr_columns->set_optimize( abap_true ).
+      gr_column ?= gr_columns->get_column( 'VBELN' ).
+      gr_column->set_long_text('Work order'(T23) ).
+      gr_column->set_short_text( '' ).
+      gr_column->set_medium_text('' ).
+    CATCH cx_salv_not_found.
+  ENDTRY .
+  TRY.
+      gr_columns = gr_table->get_columns( ).
+      gr_columns->set_optimize( abap_true ).
+      gr_column ?= gr_columns->get_column( 'STATUS' ).
+      gr_column->set_long_text('Status'(T24) ).
+      gr_column->set_short_text( '' ).
+      gr_column->set_medium_text('' ).
+    CATCH cx_salv_not_found.
+  ENDTRY .
+
+
+ENDFORM.
